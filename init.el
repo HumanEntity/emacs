@@ -1,22 +1,8 @@
-(defun rune/display-startup-time ()
-  (message "Emacs loaded in %s with %d garbage collections."
-           (format "%.2f seconds"
-                   (float-time
-                     (time-subtract after-init-time before-init-time)))
-           gcs-done))
-
-(add-hook 'emacs-startup-hook #'rune/display-startup-time)
-
 (setq package-archives
-      '(("melpa" . "https://melpa.org/packages/")
-        ("elpa" . "https://elpa.gnu.org/packages/")
-        ("nongnu" . "https://elpa.nongnu.org/nongnu/")
-        ("org" . "https://orgmode.org/elpa/")))
-        ;; ("nongnu" . "https://elpa.nongnu.org/nongnu/")
-        ;; ("melpa-stable" . "https://stable.melpa.org/packages/")))
-;; Comment/uncomment this line to enable MELPA Stable if desired.  See `package-archive-priorities`
-;; and `package-pinned-packages`. Most users will not need or want to do this.
-;;(add-to-list 'package-archives '("melpa-stable" . "https://stable.melpa.org/packages/") t)
+	'(("melpa" . "https://melpa.org/packages/")
+	  ("elpa" . "https://elpa.gnu.org/packages/")
+	  ("nongnu" . "https://elpa.nongnu.org/nongnu/")
+	  ("org" . "https://orgmode.org/elpa/")))
 
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -31,6 +17,7 @@
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
 
+(setq straight-disable-native-compile nil)
 (straight-use-package 'use-package)
 
 (setq straight-use-package-by-default t)
@@ -42,88 +29,59 @@
 ;;   (package-refresh-contents)
 ;;   (package-install 'use-package))
 ;; (eval-when-compile (require 'use-package))
-;; ;; (setq use-package-verbose t)
-;; (setq use-package-always-defer t)
-;; (setq package-native-compile t)
-;; (setq comp-deferred-compilation t)
+(setq use-package-verbose t)
+(setq use-package-always-defer t)
+(setq package-native-compile t)
+(setq comp-deferred-compilation nil)
 
-; NOTE: If you want to move everything out of the ~/.emacs.d folder
+;; Using garbage magic hack.
+(use-package gcmh
+  :config
+  (gcmh-mode 1))
+;; Setting garbage collection threshold
+(setq gc-cons-threshold 402653184
+      gc-cons-percentage 0.6)
+
+(defun rune/display-startup-time ()
+  (message "Emacs loaded in %s with %d garbage collections."
+           (format "%.2f seconds"
+                   (float-time
+                     (time-subtract after-init-time before-init-time)))
+           gcs-done))
+
+(add-hook 'emacs-startup-hook 'rune/display-startup-time)
+
+;; Silence compiler warnings as they can be pretty disruptive
+(setq native-comp-async-report-warnings-errors nil)
+(if (boundp 'comp-deferred-compilation)
+    (setq comp-deferred-compilation nil)
+  (setq native-comp-deferred-compilation nil))
+;; In noninteractive sessions, prioritize non-byte-compiled source files to
+;; prevent the use of stale byte-code. Otherwise, it saves us a little IO time
+;; to skip the mtime checks on every *.elc file.
+(setq load-prefer-newer noninteractive)
+
+;; NOTE: If you want to move everything out of the ~/.emacs.d folder
 ;; reliably, set `user-emacs-directory` before loading no-littering!
-;(setq user-emacs-directory "~/.cache/emacs")
+(setq user-emacs-directory "~/.cache/emacs")
 
-(use-package no-littering)
+(use-package no-littering
+  :defer nil)
 
 ;; no-littering doesn't set this by default so we must place
 ;; auto save files in the same path as it uses for sessions
 (setq auto-save-file-name-transforms
-    `((".*" ,(no-littering-expand-var-file-name "auto-save/") t)))
-
-(defvar rune/default-font-size 180)
-(defvar rune/default-variable-font-size 180)
-(defvar rune/frame-transparency '(90 . 90))
-
-(setq custom-file (locate-user-emacs-file "custom-vars.el"))
-(load custom-file 'noerror 'nomessage)
-
-(setq inhibit-startup-message t)
-(setq use-dialog-box nil)
-
-(menu-bar-mode -1)
-(tool-bar-mode -1)
-(scroll-bar-mode -1)
-(tooltip-mode -1)
-(auto-revert-mode 1)
-(set-fringe-mode 10)
-(xterm-mouse-mode 1)
-(column-number-mode)
-(global-auto-revert-mode 1)
-
-(global-display-line-numbers-mode 1)
-
-(dolist (mode '(org-mode-hook
-                term-mode-hook
-                vterm-mode-hook
-                shell-mode-hook
-                eshell-mode-hook))
-  (add-hook mode (lambda () (display-line-numbers-mode 0))))
-
-(use-package all-the-icons
-  :defer nil
-  :if (display-graphic-p))
-
-(defun rune/configure-font-faces ()
-  (set-frame-parameter (selected-frame) 'alpha rune/frame-transparency)
-  (add-to-list 'default-frame-alist `(alpha . ,rune/frame-transparency))
-  (set-frame-parameter (selected-frame) 'fullscreen 'maximized)
-  (add-to-list 'default-frame-alist '(fullscreen . maximized))
-
-  (set-face-attribute 'default nil :font "JetBrainsMono Nerd Font" :weight 'light :height rune/default-font-size)
-  (set-face-attribute 'fixed-pitch nil :font "JetBrainsMono Nerd Font" :weight 'light :height  rune/default-font-size)
-
-  (set-face-attribute 'variable-pitch nil :font "Iosevka Aile" :weight 'light :height 1.3))
+      `((".*" ,(no-littering-expand-var-file-name "auto-save/") t)))
 
 
-(if (daemonp)
-    (add-hook 'after-make-frame-functions
-              (lambda (frame)
-                (setq doom-modeline-icon t)
-                (with-selected-frame frame
-                  (rune/configure-font-faces))))
-  (rune/configure-font-faces))
+(setq backup-directory-alist `(("." . ,(expand-file-name "tmp/backups/" user-emacs-directory))))
+(setq create-lockfiles nil)
 
-(use-package rainbow-delimiters
-  :hook (prog-mode . rainbow-delimiters-mode))
+;; auto-save-mode doesn't create the path automatically!
+(make-directory (expand-file-name "tmp/auto-saves/" user-emacs-directory) t)
 
-(use-package doom-modeline
-  :defer nil
-  :demand t
-  :init (doom-modeline-mode 1)
-  :custom ((doom-modeline-height 15)))
-
-(use-package doom-themes
-  :demand t
-  :config
-  (load-theme 'doom-palenight t))
+(setq auto-save-list-file-prefix (expand-file-name "tmp/auto-saves/sessions/" user-emacs-directory)
+      auto-save-file-name-transforms `((".*" ,(expand-file-name "tmp/auto-saves/" user-emacs-directory) t)))
 
 (defun rune/evil-hook ()
   (dolist (mode '(custom-mode
@@ -175,7 +133,7 @@
 (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
 
 (use-package general
-  :demand
+  :defer 0
   :config
   ;; (general-evil-setup t)
   (general-create-definer rune/leader-keys
@@ -185,43 +143,346 @@
 
   (rune/leader-keys
     "t"  '(:ignore t :which-key "toggles")
-    "tt" '(counsel-load-theme :which-key "choose theme"))
+    "tt" '(counsel-load-theme :which-key "choose theme")
+	"tf" '(treemacs :which "toggle file explorer"))
   (rune/leader-keys
-    "o"  '(:ignore t :which-key "org-mode")
-    "oa" '(org-agenda :which-key "Org Agenda")))
+	"f" '(:ignore t :which-key "find")
+	"ff" '(counsel-find-file :which-key "find file")))
+  ;; (rune/leader-keys
+  ;;   "o"  '(:ignore t :which-key "org-mode")
+  ;;   "oa" '(org-agenda :which-key "Org Agenda")
+  ;;   "oc" '(org-capture :which-key "Org Capture"))
+
+(use-package which-key
+  :defer 0
+  :diminish which-key-mode
+  :config
+  (setq which-key-idle-delay 0.05 )
+  (which-key-mode))
+
+(add-to-list 'custom-theme-load-path "~/.config/emacs.gnu/themes/")
+(use-package doom-themes
+  :defer t
+  :config
+  (setq doom-themes-enable-bold t
+		doom-themes-enable-italic t))
+
+(use-package catppuccin-theme)
+
+(load-theme 'catppuccin t)
+
+(defvar rune/default-font-size 140)
+(defvar rune/default-variable-font-size 140)
+(defvar rune/frame-transparency '(90 . 90))
+
+(setq custom-file (locate-user-emacs-file "custom-vars.el"))
+(load custom-file 'noerror 'nomessage)
+
+(setq inhibit-startup-message t)
+(setq use-dialog-box nil)
+
+(menu-bar-mode -1)
+(tool-bar-mode -1)
+(scroll-bar-mode -1)
+(tooltip-mode -1)
+(auto-revert-mode 1)
+(set-fringe-mode 10)
+(xterm-mouse-mode 1)
+(column-number-mode)
+(global-auto-revert-mode 1)
+
+(global-display-line-numbers-mode 1)
+
+;; (dolist (mode '(prog-mode text-mode))
+;;   (lambda () (display-line-numbers-mode 1)))
+
+(dolist (mode '(org-mode-hook
+                term-mode-hook
+                vterm-mode-hook
+                shell-mode-hook
+                eshell-mode-hook
+                eww-mode-hook))
+  (add-hook mode (lambda () (display-line-numbers-mode 0))))
+
+(defun rune/configure-font-faces ()
+  (interactive)
+  (set-frame-parameter (selected-frame) 'alpha rune/frame-transparency)
+  (add-to-list 'default-frame-alist `(alpha . ,rune/frame-transparency))
+  (set-frame-parameter (selected-frame) 'fullscreen 'maximized)
+  (add-to-list 'default-frame-alist '(fullscreen . maximized))
+
+  (set-face-attribute 'default nil :font "JetBrainsMono Nerd Font" :weight 'light :height rune/default-font-size)
+  (set-face-attribute 'fixed-pitch nil :font "JetBrainsMono Nerd Font" :weight 'light :height  rune/default-font-size)
+
+  ;; (set-face-attribute 'variable-pitch nil :font "Iosevka Aile" :weight 'light :height 1.3)
+  (set-face-attribute 'variable-pitch nil :font "Iosevka Aile" :weight 'light))
+
+
+(if (daemonp)
+    (add-hook 'after-make-frame-functions
+		(lambda (frame)
+		  (setq doom-modeline-icon t)
+		  (with-selected-frame frame
+		    (rune/configure-font-faces))))
+  (rune/configure-font-faces))
+
+;; (use-package all-the-icons
+;;   :defer nil
+;;   :config
+;;   (set-fontset-font t 'unicode (font-spec :family "all-the-icons") nil 'append)
+;;   (set-fontset-font t 'unicode (font-spec :family "file-icons") nil 'append)
+;;   (set-fontset-font t 'unicode (font-spec :family "Material Icons") nil 'append)
+;;   (set-fontset-font t 'unicode (font-spec :family "github-octicons") nil 'append)
+;;   (set-fontset-font t 'unicode (font-spec :family "FontAwesome") nil 'append)
+;;   ;; (set-fontset-font t 'unicode "FontAwesome" nil 'prepend)
+;;   (set-fontset-font t 'unicode (font-spec :family "Weather Icons") nil 'append)
+;;   ;; (set-fontset-font t 'unicode (font-spec :family "JetBrainsMono Nerd Font") nil 'append)
+;;   :if (display-graphic-p))
+
+(use-package nerd-icons
+  :defer 0
+  :straight t
+  ;; :straight (nerd-icons
+  ;;            :type git
+  ;;            :host github
+  ;;            :repo "rainstormstudio/nerd-icons.el"
+  ;;            :files (:defaults "data"))
+  :custom
+  ;; The Nerd Font you want to use in GUI
+  ;; "Symbols Nerd Font Mono" is the default and is recommended
+  ;; but you can use any other Nerd Font if you want
+  (nerd-icons-scale-factor 1.25)
+  (nerd-fonts-icons-font-family "JetBrainsMono Nerd Font"))
+
+  ;; (use-package nerd-fonts
+  ;;   :straight (nerd-fonts :type git :host github :repo "mohkale/nerd-fonts.el")
+  ;;   :after all-the-icons
+  ;;   :demand t
+  ;;   :config
+  ;;   (require 'nerd-fonts-data))
+
+  ;; (use-package all-the-icons-nerd-fonts
+  ;;   :straight
+  ;;   (all-the-icons-nerd-fonts :host github :repo "mohkale/all-the-icons-nerd-fonts")
+  ;;   :after all-the-icons
+  ;;   :demand t
+  ;;   :config
+  ;;   (all-the-icons-nerd-fonts-prefer))
+
+(use-package rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))
+
+(use-package doom-modeline
+  :straight (doom-modeline
+             :type git
+             :host github
+             :repo "seagle0128/doom-modeline")
+  :demand t
+  :init
+  (require 'nerd-icons)
+  (doom-modeline-mode 1)
+  :custom ((doom-modeline-height 50)))
+
+;; (use-package dashboard
+;;   :straight (dashboard
+;;              :type git
+;;              :host github
+;;              :repo "rainstormstudio/emacs-dashboard")
+;;   :commands (dashboard dashboard-open)
+;;   :init
+;;   (progn
+;;     (setq dashboard-items '((recents . 5)
+;;                             (projects . 3)
+;;                             (agenda . 4))
+;;           dashboard-center-content t
+;;           dashboard-set-file-icons nil
+;;           dashboard-set-heading-icons nil
+;;           dashboard-startup-banner "~/.config/emacs.gnu/images/logo.png"
+;;           dashboard-set-navigator t
+;;           dashboard-set-init-info t
+;;           dashboard-set-footer nil
+;;           dashboard-show-shortcuts nil
+;;           dashboard-week-agenda t
+;; 		  dashboard-icon-type 'nerd-icons
+;; 		  dashboard-display-icons-p nil
+;;           ))
+;;   :config
+;;   ;; (dashboard-modify-heading-icons '((recents . "nf-oct-)))
+;;   (dashboard-setup-startup-hook))
+
+;; ;; daemon config
+;; ;; (if (daemonp) 
+;; (setq initial-buffer-choice (lambda ()
+;;                               (get-buffer-create "*dashboard*")
+;;                               (dashboard-open)))
+
+(use-package dashboard
+  :defer 0
+  ;; :disabled t
+  :init
+  ;; (setq initial-buffer-choice 'dashboard-open)
+  ;; (setq dashboard-set-heading-icons t)
+  (setq dashboard-set-file-icons t)
+  (setq dashboard-startup-banner "~/.config/emacs/images/logo.png"
+        dashboard-set-navigator t
+        dashboard-set-init-info t
+        dashboard-set-footer nil
+        dashboard-show-shortcuts nil
+		dashboard-icon-type 'nerd-icons
+		dashboard-display-icons-p t)
+  ;; (setq dashboard-banner-logo-title "Emacs Is More Than A Text Editor!")
+  ;; (setq dashboard-startup-banner 'logo) ;; use standard emacs logo as banner
+  ;; (setq dashboard-startup-banner "/home/dt/.config/emacs/images/emacs-dash.png")  ;; use custom image as banner
+  (setq dashboard-center-content t) ;; set to 't' for centered content
+  (setq dashboard-items '((recents . 5)
+                          (agenda . 5 )
+						  (projects . 3)
+                          (registers . 3)))
+  ;; (dashboard-modify-heading-icons '((recents . "file-text")
+  ;; 								(bookmarks . "book")))
+  :config
+  (dashboard-setup-startup-hook))
+
+
+
+(defun open-config ()
+  (interactive)
+  (find-file "~/.config/emacs.gnu/Emacs.org"))
+
+(defun reload-init-file ()
+  (interactive)
+  (load-file user-init-file)
+  (load-file user-init-file))
+  
+(rune/leader-keys
+  "h" '(:ignore t :which-key "hub")
+  "hd" '(dashboard-open :which-key "dashboard")
+  "hc" '(open-config :which-key "config")
+  "hr" '(reload-init-file :which-key "hot reload"))
+
+(use-package tree-sitter-langs
+  :demand t)
+(use-package tree-sitter
+  :defer 0
+  :requires (tree-sitter-langs)
+  :config
+  (global-tree-sitter-mode)
+  (add-hook 'tree-sitter-after-on-hook #'tree-sitter-hl-mode))
+
+(use-package ligature
+  :load-path "path-to-ligature-repo"
+  :config
+  ;; Enable the "www" ligature in every possible major mode
+  (ligature-set-ligatures 't '("www"))
+  ;; Enable traditional ligature support in eww-mode, if the
+  ;; `variable-pitch' face supports it
+  (ligature-set-ligatures 'eww-mode '("ff" "fi" "ffi"))
+  ;; Enable all Cascadia Code ligatures in programming modes
+  (ligature-set-ligatures '(prog-mode org-mode) '("|||>" "<|||" "<==>" "<!--" "####" "~~>" "***" "||=" "||>"
+                                       ":::" "::=" "=:=" "===" "==>" "=!=" "=>>" "=<<" "=/=" "!=="
+                                       "!!." ">=>" ">>=" ">>>" ">>-" ">->" "->>" "-->" "---" "-<<"
+                                       "<~~" "<~>" "<*>" "<||" "<|>" "<$>" "<==" "<=>" "<=<" "<->"
+                                       "<--" "<-<" "<<=" "<<-" "<<<" "<+>" "</>" "###" "#_(" "..<"
+                                       "..." "+++" "/==" "///" "_|_" "www" "&&" "^=" "~~" "~@" "~="
+                                       "~>" "~-" "**" "*>" "*/" "||" "|}" "|]" "|=" "|>" "|-" "{|"
+                                       "[|" "]#" "::" ":=" ":>" ":<" "$>" "==" "=>" "!=" "!!" ">:"
+                                       ">=" ">>" ">-" "-~" "-|" "->" "--" "-<" "<~" "<*" "<|" "<:"
+                                       "<$" "<=" "<>" "<-" "<<" "<+" "</" "#{" "#[" "#:" "#=" "#!"
+                                       "##" "#(" "#?" "#_" "%%" ".=" ".-" ".." ".?" "+>" "++" "?:"
+                                       "?=" "?." "??" ";;" "/*" "/=" "/>" "//" "__" "~~" "(*" "*)"
+                                       "\\\\" "://" "lambda"))
+  ;; Enables ligature checks globally in all buffers. You can also do it
+  ;; per mode with `ligature-mode'.
+  (global-ligature-mode t))
+
+(defun rune/prettify-set ()
+  (interactive)
+  (setq prettify-symbols-alist
+        '(("lambda" . "λ"))))
+   ;;        ("|>" . "▷")
+   ;;        ("<|" . "◁")
+   ;;        ("->>" . "↠")
+   ;;        ("->" . "→")
+   ;;        ("<-" . "←")
+   ;;        ("=>" . "⇒")
+   ;;        ("<=" . "≤")
+   ;;        (">=" . "≥"))))
+
+(defun rune/prettify-org-set ()
+  (interactive)
+  (rune/prettify-set)
+  (setq prettify-symbols-alist '(("TODO" . "")
+                                 ("WAIT" . "")        
+                                 ("NOPE" . "")
+                                 ("DONE" . "﫠")
+                                 ("[#A]" . "")
+                                 ("[#B]" . "")
+                                 ("[#C]" . "")
+                                 ("#+author:" . "")
+                                 ("#+title:" . "﫳"))))
+                         ;; ("[ ]" . "☐")
+                         ;; ("[X]" . "☑")
+                         ;; ("[-]" . "❍")
+                         ;; ;; ("TODO" . "")
+                         ;; ("TODO" . "")
+                         ;; ("WAIT" . "󰏦")        
+                         ;; ("NOPE" . "󰜺")
+                         ;; ("DONE" . "")
+                         ;; ;; ("[#A]" . "")
+                         ;; ("[#A]" . "")
+                         ;; ;; ("[#B]" . "")
+                         ;; ("[#B]" . "󱐋")
+                         ;; ;; ("[#C]" . "")
+                         ;; ("[#C]" . "󰅶")
+       ;; (add-to-list 'prettify-symbols-alist ligature)))
+
+   ;; (add-hook 'prog-mode-hook 'rune/prettify-set)
+;; (add-hook 'org-mode-hook 'rune/prettify-org-set)
+;; (rune/prettify-set)
+;; (global-prettify-symbols-mode 1)
+
+(use-package writeroom-mode
+  :defer 0)
 
 (use-package ivy
   :diminish
   :bind (("C-s" . swiper)
-         :map ivy-minibuffer-map
-         ("TAB" . ivy-alt-done)
-         ("C-l" . ivy-alt-done)
-         ("C-j" . ivy-next-line)
-         ("C-k" . ivy-previous-line)
-         :map ivy-switch-buffer-map
-         ("C-k" . ivy-previous-line)
-         ("C-l" . ivy-done)
-         ("C-d" . ivy-switch-buffer-kill)
-         :map ivy-reverse-i-search-map
-         ("C-k" . ivy-previous-line)
-         ("C-d" . ivy-reverse-i-search-kill))
+	   :map ivy-minibuffer-map
+	   ("TAB" . ivy-alt-done)
+	   ("C-l" . ivy-alt-done)
+	   ("C-j" . ivy-next-line)
+	   ("C-k" . ivy-previous-line)
+	   :map ivy-switch-buffer-map
+	   ("C-k" . ivy-previous-line)
+	   ("C-l" . ivy-done)
+	   ("C-d" . ivy-switch-buffer-kill)
+	   :map ivy-reverse-i-search-map
+	   ("C-k" . ivy-previous-line)
+	   ("C-d" . ivy-reverse-i-search-kill))
   :config
   (ivy-mode 1))
 
-(use-package ivy-rich
-  :after ivy
-  :init
-  (ivy-rich-mode 1))
-
-  ;; Counsel Configuration
+;; Counsel Configuration
 (use-package counsel
   :bind (("M-x" . counsel-M-x)
-         ("C-x b" . counsel-ibuffer)
-         ("C-x C-f" . counsel-find-file)
-         :map minibuffer-local-map
-         ("C-r" . 'counsel-minibuffer-history))
+	   ("C-x b" . counsel-switch-buffer)
+	   ("C-x C-f" . counsel-find-file)
+	   :map minibuffer-local-map
+	   ("C-r" . 'counsel-minibuffer-history))
+  :config
+  (counsel-mode 1))
+
+
+(use-package ivy-rich
   :init
-  (counsel-mode t))
+  (setq ivy-prescient-retain-classic-highlighting t)
+  (ivy-rich-mode 1))
+
+(use-package ivy-prescient
+  :after counsel
+  :config
+  (prescient-persist-mode 1)
+  (ivy-prescient-mode 1))
 
 ;; Helpful Configuration
 
@@ -237,21 +498,28 @@
   ([remap describe-key] . helpful-key))
 
 (use-package yasnippet
-  :defer 0
+  :defer t
   :custom
-  (yas-snippet-dirs '("~/.emacs.d/snippets"))
+  (yas-snippet-dirs '("~/.config/emacs.gnu/snippets/"))
   :config
   (yas-global-mode 1))
 
 ;; Automatically tangle our Emacs.org config file when we save it
 (defun rune/org-babel-tangle-config ()
-  (when (string-equal (buffer-file-name)
-                      (expand-file-name "~/.emacs.d/Emacs.org"))
+  (when (string-equal (file-name-directory (buffer-file-name))
+                      (expand-file-name "~/.config/emacs/"))
     ;; Dynamic scoping to the rescue
     (let ((org-confirm-babel-evaluate nil))
       (org-babel-tangle))))
 
 (add-hook 'org-mode-hook (lambda () (add-hook 'after-save-hook #'rune/org-babel-tangle-config)))
+
+(use-package toc-org
+  :straight t
+  :commands toc-org-enable
+  :init (add-hook 'org-mode-hook 'toc-org-enable))
+
+(electric-indent-mode -1)
 
 (defun rune/org-font-setup ()
   (font-lock-add-keywords 'org-mode
@@ -270,7 +538,7 @@
 
   (set-face-attribute 'org-document-title nil :font "Iosevka Aile" :weight 'bold :height 1.3)
 
-  (set-face-attribute 'org-block nil    :foreground nil :inherit 'fixed-pitch)
+  (set-face-attribute 'org-block nil    :foreground 'unspecified :inherit 'fixed-pitch)
   (set-face-attribute 'org-table nil    :inherit 'fixed-pitch)
   (set-face-attribute 'org-formula nil  :inherit 'fixed-pitch)
   (set-face-attribute 'org-code nil     :inherit '(shadow fixed-pitch))
@@ -285,13 +553,15 @@
   (variable-pitch-mode 1)
   (auto-fill-mode 0)
   (visual-line-mode 1)
+  (company-mode 0)
+  ;; (writeroom-mode 1)
   (setq evil-auto-indent nil))
 
 (use-package org
+  :defer 0
   :commands (org-capture org-agenda)
   :hook (org-mode . rune/org-mode-setup)
   :config
-  (message "Org Mod loaded")
   (setq org-ellipsis " ▾")
 
   (setq org-agenda-start-with-log-mode t)
@@ -299,13 +569,23 @@
   (setq org-log-into-drawer t)
 
   (setq org-agenda-files
-        '("~/dev/tasks/OrgFiles/Tasks.org"
-          "~/dev/tasks/OrgFiles/Birthdays.org"))
+        ;; '("~/dev/tasks/OrgFiles/Tasks.org"
+        ;;   "~/dev/tasks/OrgFiles/Birthdays.org"
+        ;;   "~/dev/tasks/OrgFiles/Journal.org"
+          '("~/.agenda.org"))
+
+  (setq recentf-exclude org-agenda-files)
 
   (org-babel-do-load-languages
-   'org-babel-do-load-languages
+   'org-babel-load-languages
    '((emacs-lisp . t)
-     (python . t)))
+     (python     . t)))
+
+  (setq org-babel-python-command "python3")
+
+  (defun my-org-confirm-babel-evaluate (lang body)
+    (not (string= lang "python")))
+  (setq org-confirm-babel-evaluate 'my-org-confirm-babel-evaluate)
 
   (push '("conf-unix" . conf-unix) org-src-lang-modes)
 
@@ -393,7 +673,7 @@
 
   (setq org-capture-templates
     `(("t" "Tasks / Projects")
-      ("tt" "Task" entry (file+olp "~/dev/tasks/OrgFiles/Tasks.org" "Inbox")
+      ("tt" "Task" entry (file+olp "~/dev/tasks/OrgFiles/Tasks.org" "Tasks")
            "* TODO %?\n  %U\n  %a\n  %i" :empty-lines 1)
 
       ("j" "Journal Entries")
@@ -416,7 +696,7 @@
       ("m" "Metrics Capture")
       ("mw" "Weight" table-line (file+headline "~/dev/tasks/OrgFiles/Metrics.org" "Weight")
        "| %U | %^{Weight} | %^{Notes} |" :kill-buffer t)))
-  (rune/org-font-setup))
+   (rune/org-font-setup))
 
 (use-package org-bullets
   :hook (org-mode . org-bullets-mode)
@@ -425,12 +705,13 @@
 
 (defun rune/org-mode-visual-fill ()
   (setq visual-fill-column-width 100
-	visual-fill-column-center-text t)
+    visual-fill-column-center-text t)
   (visual-fill-column-mode 1))
 
 (use-package visual-fill-column
   :defer t
-  :hook (org-mode . rune/org-mode-visual-fill))
+  :hook ((org-mode . rune/org-mode-visual-fill)
+         (eww-mode . rune/org-mode-visual-fill)))
 
 (use-package org-roam
   :after org
@@ -444,6 +725,10 @@
   (org-roam-setup))
 
 (use-package org-present
+  :after org
+  :bind (:map org-present-mode-keymap
+	      ("<left>" . org-present-prev)
+	      ("<right>" . org-present-next))
   :commands (org-present)
   :init
   (add-hook 'org-present-mode-hook 'rune/org-present-start)
@@ -473,14 +758,27 @@
   (setq header-line-format nil)
   (setq-local face-remapping-alist '((default variable-pitch default))))
 
-(use-package which-key
+(rune/leader-keys
+  "o"  '(:ignore t :which-key "org-mode")
+  "oa" '(org-agenda :which-key "Org Agenda")
+  "oc" '(org-capture :which-key "Org Capture")
+  "oe" '(org-babel-execute-src-block :which-key "Execute Src Block"))
+
+(use-package htmlize
   :defer 0
-  :diminish which-key-mode
   :config
-  (which-key-mode)
-  (setq which-key-idle-delay 0.1 ))
+  (setq htmlize-output-type 'inline-css))
+
+(use-package org-alert
+  :straight t
+  :custom (alert-default-style 'message)
+  :config
+  (setq org-alert-interval 300)
+  (setq org-alert-notification-title "Org Reminder")
+  (org-alert-enable))
 
 (use-package projectile
+  :defer t
   :diminish projectile-mode
   :config (projectile-mode)
   :bind-keymap
@@ -497,12 +795,54 @@
 (use-package magit
   :commands (magit-status magit-get-current-branch)
   :custom
-  (magit-display-buffer-function #'magit-display-buffer-same-window-diff-v1))
+  (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
+
+(rune/leader-keys
+  "g"  '(:ignore t :which-key "git")
+  "gg" '(magit-status :which-key "git status"))
 
 (use-package forge
   :after magit)
 
+(use-package git-gutter
+  :hook (prog-mode . git-gutter-mode)
+  :requires git-gutter-fringe
+  :config
+  (setq git-gutter:update-interval 0.02))
+
+(use-package git-gutter-fringe
+  :after git-gutter
+  :config
+  (define-fringe-bitmap 'git-gutter-fr:added [224] nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:modified [224] nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240] nil nil 'bottom))
+
+(use-package autopair
+  :init
+  (setq autopair-autowrap t))
+  ;; (autopair-global-mode 1))
+
+(use-package company-mode
+  :bind (:map company-active-map
+			  ("<tab>" . company-complete-selection))
+  (:map eglot-map
+        ("<tab>" . company-indent-or-complete-common))
+  :custom
+  (company-minimum-prefix-length 1)
+  (company-idle-delay 0.1)
+  :init
+  (global-company-mode 1))
+
+(use-package company-box
+  :hook (company-mode . company-box-mode))
+
+(use-package company-prescient
+  :after company
+  :config
+  (company-prescient-mode 1))
+
 (use-package corfu
+  :disabled
   ;; Optional customizations
   :custom
   (corfu-cycle t)                 ; Allows cycling through candidates
@@ -536,16 +876,17 @@
                               corfu-auto nil)
               (corfu-mode))))
 
-(corfu-mode 1)
+;; (corfu-mode 1)
 
 (use-package corfu-terminal
+  :disabled
   :after corfu
   :load-path "lisp/corfu-terminal"
   :config
   (corfu-terminal-mode 1))
 
 (use-package cape
-  :defer 10
+  :disabled
   :init
   ;; Add `completion-at-point-functions', used by `completion-at-point'.
   (add-to-list 'completion-at-point-functions #'cape-file)
@@ -558,250 +899,125 @@
   ;; and behaves as a pure `completion-at-point-function'.
   (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-purify))
 
+;; (use-package lsp-mode
+;;   :disabled
+;;   :demand nil
+;;   :config
+;;   (setq display-buffer-base-action '(display-buffer-below-selected))
+;;   (edwina-mode 1))
+
+;; (use-package rustic
+;;   :defer t
+;;   :custom
+;;   ;;(rustic-lsp-server . ('rust-analyzer))
+;;   (rustic-analyzer-command '("rustup" "run" "stable" "rust-analyzer")))
+
 (use-package rust-mode
-  :defer t
   :mode "\\.rs\\'"
-  :hook (rust-mode . lsp-deferred)
-  :config
-  :init
+  :hook (rust-mode . (lambda () (eglot)))
+  :custom
   ;; scratchpad for rust
-  (setq lsp-rust-clippy-preference "on")
+  ;; (setq lsp-rust-clippy-preference "on")
   (use-package rust-playground
     :commands (rust-playground)))
 
-(use-package lsp-pyright
-  :defer t
+(use-package python-mode
+  :mode "\\.py\\'"
+  :config
+  (setq python-shell-completion-native-enable nil)
+  (python-mode)
   :hook (python-mode . (lambda ()
-                         (require 'lsp-pyright)
-                         (lsp-deferred))))  ; or lsp-deferred
+                         (eglot))))  ; or lsp-deferred
 
-(use-package ccls
-  :defer t
-  :hook ((c-mode c++-mode objc-mode cuda-mode) . (lambda () (require 'ccls) (lsp-deferred))))
+;; (use-package ccls
+;;   :defer t)
+;;   :hook ((c-mode c++-mode objc-mode cuda-mode) . (lambda () (require 'ccls) (lsp-deferred))))
 
-(use-package typescript-mode
-  :mode "\\.ts\\'"
-  :hook (typescript-mode . lsp-deferred)
+;; (use-package typescript-mode
+;;   :mode "\\.ts\\'"
+;;   :hook (typescript-mode . lsp-deferred)
+;;   :config
+;;   (setq typescript-indent-level 2))
+
+(use-package haskell-mode
+  :mode "\\.hs\\'"
+  :hook ((haskell-mode . (lambda () (eglot)))
+		 (haskell-mode . interactive-haskell-mode)
+		 (haskell-mode . haskell-doc-mode))
+		 ;; (haskell-mode . hindent-mode))
+  :custom (haskell-stylish-on-save t)
+  :bind ("C-c C-c" . haskell-compile))
+  ;; :config
+  ;; (require 'lsp-haskell))
+;; (use-package lsp-haskell
+;;   :ensure t
+;;   :config
+;;   (setq lsp-haskell-process-path-hie "ghcide")
+;;   (setq lsp-haskell-process-args-hie '()))
+
+(use-package go-mode
+  :hook (go-mode . (lambda () (eglot)))
+  :mode "\\.go\\'")
+
+(use-package v-mode
+  :straight (v-mode
+             :type git
+             :host github
+             :repo "damon-kwok/v-mode"
+             :files ("tokens" "v-mode.el"))
   :config
-  (setq typescript-indent-level 2))
+  :bind-keymap
+  ("M-z" . v-menu)
+  ("<f6>" . v-menu)
+  ("C-c C-f" . v-format-buffer)
+  :mode ("\\(\\.v?v\\|\\.vsh\\)$" . 'v-mode))
 
-(use-package dap-mode
-  :commands dap-debug
-  :config
-  (dap-ui-mode)
-
-  ;; (require 'dap-codelldb)
-  ;; (require 'dap-lldb)
-  (require 'dap-gdb-lldb)
-  (require 'dap-cpptools)
-
-  ;; (dap-codelldb-setup)
-  (dap-cpptools-setup)
-  (dap-gdb-lldb-setup))
-  ;;(require 'dap-codelldb)
-  ;; installs .extension/vscode
-  ;;(dap-codelldb-setup)
-  ;;(dap-cpptools-setup))
-  ;;:custom
-  ;; (dap-auto-configure-features '(sessions locals breakpoints expressions repl controls tooltip))
-  ;;(dap-lldb-debug-program `(,(expand-file-name "/opt/homebrew/opt/llvm/bin/lldb"))))
-
-(with-eval-after-load 'dap-mode
-  (dap-register-debug-template
-   "Rust::LLDB Run Configuration"
-   (list :type "cppdbg"
-         :request "launch"
-         :name "Rust::Run"
-         :MIMode "lldb"
-         :miDebuggerPath "rust-lldb"
-         :enviroment []
-         :program "${workspaceFolder}/target/debug/${target}"
-         :cwd "${workspaceFolder}"
-         :console "external"
-         :dap-compilation "cargo build"
-         :dap-compilation-dir "${workspaceFolder}")))
-
-(use-package term
-  :commands term
-  :config
-  (setq explicit-shell-file-name "zsh") ;; Change this to zsh, etc
-  ;;(setq explicit-zsh-args '())         ;; Use 'explicit-<shell>-args for shell-specific args
-  ;; Match the default Bash shell prompt.  Update this if you have a custom prompt
-  (setq term-prompt-regexp "^[^#$%>\n]*[#$%>] *"))
-
-(use-package eterm-256color
-  :hook (term-mode . eterm-256color-mode))
+(use-package gdscript-mode
+  :mode "\\.gd\\'")
 
 (use-package vterm
-  :commands (vterm vterm-other-window)
-  :config
-  (setq term-prompt-regexp "^[^#$%>\n]*[#$%>] *")  ;; Set this to match your custom shell prompt
-  (setq vterm-shell "zsh")                       ;; Set this to customize the shell to launch
-  (setq vterm-max-scrollback 10000))
+  :commands (vterm vterm-other-window))
 
-(defun rune/configure-eshell ()
-  ;; Save command history when commands are entered
-  (add-hook 'eshell-pre-command-hook 'eshell-save-some-history)
+(defun split-window-sensibly-prefer-horizontal (&optional window)
+"Based on split-window-sensibly, but designed to prefer a horizontal split,
+i.e. windows tiled side-by-side."
+  (let ((window (or window (selected-window))))
+    (or (and (window-splittable-p window t)
+         ;; Split window horizontally
+         (with-selected-window window
+           (split-window-right)))
+    (and (window-splittable-p window)
+         ;; Split window vertically
+         (with-selected-window window
+           (split-window-below)))
+    (and
+         ;; If WINDOW is the only usable window on its frame (it is
+         ;; the only one or, not being the only one, all the other
+         ;; ones are dedicated) and is not the minibuffer window, try
+         ;; to split it horizontally disregarding the value of
+         ;; `split-height-threshold'.
+         (let ((frame (window-frame window)))
+           (or
+            (eq window (frame-root-window frame))
+            (catch 'done
+              (walk-window-tree (lambda (w)
+                                  (unless (or (eq w window)
+                                              (window-dedicated-p w))
+                                    (throw 'done nil)))
+                                frame)
+              t)))
+     (not (window-minibuffer-p window))
+     (let ((split-width-threshold 0))
+       (when (window-splittable-p window t)
+         (with-selected-window window
+           (split-window-right))))))))
 
-  ;; Truncate buffer for performance
-  (add-to-list 'eshell-output-filter-functions 'eshell-truncate-buffer)
+(defun split-window-really-sensibly (&optional window)
+  (let ((window (or window (selected-window))))
+    (if (> (window-total-width window) (* 2 (window-total-height window)))
+        (with-selected-window window (split-window-sensibly-prefer-horizontal window))
+      (with-selected-window window (split-window-sensibly window)))))
 
-  ;; Bind some useful keys for evil-mode
-  (evil-define-key '(normal insert visual) eshell-mode-map (kbd "C-r") 'counsel-esh-history)
-  (evil-define-key '(normal insert visual) eshell-mode-map (kbd "<home>") 'eshell-bol)
-  (evil-normalize-keymaps)
-
-  (setq eshell-history-size         10000
-        eshell-buffer-maximum-lines 10000
-        eshell-hist-ignoredups t
-        eshell-scroll-to-bottom-on-input t))
-
-  (use-package eshell-git-prompt
-    :after eshell-)
-
-  (use-package eshell
-    :hook (eshell-first-time-mode . rune/configure-eshell)
-    :config
-
-    (with-eval-after-load 'esh-opt
-      (setq eshell-destroy-buffer-when-process-dies t)
-      (setq eshell-visual-commands '("htop" "zsh" "vim")))
-
-    (eshell-git-prompt-use-theme 'multiline))
-
-(use-package dired-single
-  :after dired)
-
-(use-package all-the-icons-dired
-  :hook (dired-mode . all-the-icons-dired-mode))
-
-(use-package dired-open
-  :after dired
-  :config
-  ;; (add-to-list 'dired-open-functions #'dired-open-xdg t)
-  (setq dired-open-extensions '(("png" . "feh")
-                                ("mkv" . "mpv"))))
-
-(use-package dired-hide-dotfiles
-  :after evil-collection
-  :hook (dired-mode . dired-hide-dotfiles-mode)
-  :config
-  (evil-collection-define-key 'normal 'dired-mode-map
-                              "H" 'dired-hide-dotfiles-mode))
-
-(use-package dired
-  :straight nil
-  :defer 0
-  :after evil-collection
-  :commands (dired dired-jump)
-  :bind (("C-x C-j" . dired-jump))
-  :custom ((dired-listing-switches "-agho --group-directories-first"))
-  :config
-  (evil-collection-define-key 'normal 'dired-mode-map
-                              "h" 'dired-single-up-directory
-                              "l" 'dired-single-buffer))
-
-(use-package perspective
-  :demand t
-  :custom
-  (persp-initial-frame-name "Main")
-  (persp-mode-prefix-key (kbd "C-x x"))
-  :bind (("C-x k" . persp-kill-buffer*))
-  :init
-  (unless (equal persp-mode t)
-    (persp-mode)))
-
-(use-package speed-type
-  :defer 1)
-
-;; (use-package erc
-;;   :custom
-;;   (erc-nick "HumanEntity"))
-
-;;  (with-eval-after-load 'erc
-;;    (load "~/.emacs.d/lisp/erc/erc-sasl.el")
-
-;;    (require 'erc-sasl)
-;;    (add-to-list 'erc-sasl-server-regexp-list "irc\\.libera\\.chat")
-
-;;    ;; Redefine/Override the erc-login() function from the erc package, so that
-;;    ;; it now uses SASL
-;;    (defun erc-login ()
-;;      "Perform user authentication at the IRC server. (PATCHED)"
-;;      (erc-log (format "login: nick: %s, user: %s %s %s :%s"
-;;                       (erc-current-nick)
-;;                       (user-login-name)
-;;                       (or erc-system-name (system-name))
-;;                       erc-session-server
-;;                       erc-session-user-full-name))
-;;      (if erc-session-password
-;;          (erc-server-send (format "PASS %s" erc-session-password))
-;;        (message "Logging in without password"))
-;;      (when (and (featurep 'erc-sasl) (erc-sasl-use-sasl-p))
-;;        (erc-server-send "CAP REQ :sasl"))
-;;      (erc-server-send (format "NICK %s" (erc-current-nick)))
-;;      (erc-server-send
-;;       (format "USER %s %s %s :%s"
-;;               ;; hacked - S.B.
-;;               (if erc-anonymous-login erc-email-userid (user-login-name))
-;;               "0" "*"
-;;               erc-session-user-full-name))
-;;      (erc-update-mode-line)))
-
-;;  (defun rune/erc-chat ()
-;;    (erc-tls :server "irc.libera.chat" :port 6697 :nick "HumanEntity"
-;;    :full-name "HumanEntity"
-;;    :password "HuM@n@b1e"))
-
-(setq-default indent-tabs-mode t)
-(setq-default tab-width 4) ; Assuming you want your tabs to be four spaces wide
-
-(use-package edwina
-  :config
-  (setq display-buffer-base-action '(display-buffer-below-selected))
-  (edwina-mode 1))
-
-;; 
-;;   (defun split-window-sensibly-prefer-horizontal (&optional window)
-;;   "Based on split-window-sensibly, but designed to prefer a horizontal split,
-;;   i.e. windows tiled side-by-side."
-;;     (let ((window (or window (selected-window))))
-;;       (or (and (window-splittable-p window t)
-;;            ;; Split window horizontally
-;;            (with-selected-window window
-;;              (split-window-right)))
-;;       (and (window-splittable-p window)
-;;            ;; Split window vertically
-;;            (with-selected-window window
-;;              (split-window-below)))
-;;       (and
-;;            ;; If WINDOW is the only usable window on its frame (it is
-;;            ;; the only one or, not being the only one, all the other
-;;            ;; ones are dedicated) and is not the minibuffer window, try
-;;            ;; to split it horizontally disregarding the value of
-;;            ;; `split-height-threshold'.
-;;            (let ((frame (window-frame window)))
-;;              (or
-;;               (eq window (frame-root-window frame))
-;;               (catch 'done
-;;                 (walk-window-tree (lambda (w)
-;;                                     (unless (or (eq w window)
-;;                                                 (window-dedicated-p w))
-;;                                       (throw 'done nil)))
-;;                                   frame)
-;;                 t)))
-;;        (not (window-minibuffer-p window))
-;;        (let ((split-width-threshold 0))
-;;          (when (window-splittable-p window t)
-;;            (with-selected-window window
-;;              (split-window-right))))))))
-;; 
-;;   (defun split-window-really-sensibly (&optional window)
-;;     (let ((window (or window (selected-window))))
-;;       (if (> (window-total-width window) (* 2 (window-total-height window)))
-;;           (with-selected-window window (split-window-sensibly-prefer-horizontal window))
-;;         (with-selected-window window (split-window-sensibly window)))))
-;; 
-;;   (setq split-height-threshold 4
-;;         split-width-threshold 40
-;;         split-window-preferred-function 'split-window-really-sensibly)
+(setq split-height-threshold 4
+      split-width-threshold 40
+      split-window-preferred-function 'split-window-really-sensibly)
