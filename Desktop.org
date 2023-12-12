@@ -1,0 +1,289 @@
+#+title: Desktop conf
+#+property: header-args:emacs-lisp :tangle ./desktop.el
+
+* Window Management
+
+** EXWM
+
+#+begin_src emacs-lisp
+  (defun rune/run-in-background (command)
+    (let ((command-parts (split-string command "[ ]+")))
+    	(apply #'call-process `(,(car command-parts) nil 0 nil ,@(cdr command-parts)))))
+
+  (defun rune/exwm-update-class ()
+    (exwm-workspace-rename-buffer exwm-class-name))
+
+  (defun rune/exwm-update-title ()
+    (pcase exwm-class-name
+    	("firefox" (exwm-workspace-rename-buffer (format "Firefox: %s" exwm-title)))))
+
+  (defun rune/configure-window-by-class ()
+    (interactive)
+    ;; (message "Window '%s' appeared!" exwm-class-name)
+    (pcase exwm-class-name
+  	("firefox" (exwm-workspace-move-window 2))))
+
+  (defvar rune/polybar-process nil
+    "Holds the process of the running Polybar instance, if any")
+
+  (defun rune/kill-panel ()
+    (interactive)
+    (when rune/polybar-process
+      (ignore-errors
+        (kill-process rune/polybar-process))
+    (setq rune/polybar-process nil)))
+
+  (defun rune/start-panel ()
+    (interactive)
+    (rune/kill-panel)
+    (setq rune/polybar-process (start-process-shell-command "polybar" nil "polybar panel")))
+
+  (defun rune/exwm-init-hook ()
+    (exwm-workspace-switch-create 1)
+    (rune/start-panel))
+   
+  (defvar rune/exwm-started t)
+
+  (use-package exwm
+    :defer nil
+    :demand t
+    :config
+    (setq exwm-workspace-number 5)
+    
+    ;; Update names of the applications
+    (add-hook 'exwm-update-class-hook #'rune/exwm-update-class)
+    (add-hook 'exwm-update-title-hook #'rune/exwm-update-title)
+    
+    (add-hook 'exwm-manage-finish-hook #'rune/configure-window-by-class)
+    
+    ;; Start some applications on init
+    (add-hook 'exwm-init-hook #'rune/exwm-init-hook)
+
+    (require 'exwm-systemtray)
+    (setq exwm-systemtray-height 32)
+    (exwm-systemtray-enable) 
+    
+    ;; These keys should always pass through to Emacs
+    (setq exwm-input-prefix-keys
+    		'(?\C-x
+    		  ?\C-u
+    		  ?\C-h
+    		  ?\M-x
+    		  ?\M-`
+    		  ?\M-&
+    		  ?\M-:
+    		  ?\C-\M-j ;; Buffer list
+    		  ?\C-\ ))
+
+    ;; Ctrl+Q will enable the next key to be sent directly
+    (define-key exwm-mode-map [?\C-q] 'exwm-input-send-next-key)
+    (define-key exwm-mode-map [?\C-=] 'exwm-workspace-switch)
+    
+    ;; Set up global key bindings.  These always work, no matter the input state!
+    ;; Keep in mind that changing this list after EXWM initializes has no effect.
+    (setq exwm-input-global-keys
+  		`(
+            ;; Reset to line-mode (C-c C-k switches to char-mode via exwm-input-release-keyboard)
+            ([?\s-r] . exwm-reset)
+  		  
+            ;; Move between windows
+            ([s-left] . windmove-left)
+            ([s-right] . windmove-right)
+            ([s-up] . windmove-up)
+            ([s-down] . windmove-down)
+  		  
+            ;; Launch applications via shell command
+            ([?\s-&] . (lambda (command)
+                         (interactive (list (read-shell-command "$ ")))
+                         (start-process-shell-command command nil command)))
+  		  
+            ;; Switch workspace
+            ([?\s-w] . exwm-workspace-switch)
+  		  
+            ;; 's-N': Switch to certain workspace with Super (Win) plus a number key (0 - 9)
+            ,@(mapcar (lambda (i)
+                        `(,(kbd (format "s-%d" i)) .
+     						(lambda ()
+                            (interactive)
+                            (exwm-workspace-switch-create ,i))))
+     					(number-sequence 0 9))))
+    
+    (start-process-shell-command "xmodmap" nil "xmodmap ~/.emacs.d/exwm/Xmodmap")    
+    
+    (exwm-input-set-key (kbd "s-SPC") 'counsel-linux-app)
+
+    (exwm-enable))
+#+end_src
+
+*** Start script
+#+begin_src shell :tangle ~/.config/emacs/exwm/start-exwm.sh
+  picom &
+   
+  exec dbus-launch --exit-with-session emacs -mm --debug-init -l ~/.config/emacs/desktop.el
+#+end_src
+
+* Desktop Environment
+** Keys
+#+begin_src conf :tangle ~/.config/emacs/exwm/Xmodmap
+  clear lock
+  clear control
+  keycode 66 = Control_L
+  add control = Control_L
+  add Lock = Control_R
+#+end_src
+** Polybar
+#+begin_src conf :tangle ~/.config/polybar/config.ini
+
+  [colors]
+  background = #282A2E
+  background-alt = #373B41
+  foreground = #C5C8C6
+  primary = #F0C674
+  secondary = #8ABEB7
+  alert = #A54242
+  disabled = #707880
+
+  [bar/panel]
+  width = 100%
+  height = 24pt
+  radius = 6
+
+  ; dpi = 96
+
+  background = ${colors.background}
+  foreground = ${colors.foreground}
+
+  line-size = 3pt
+
+  border-size = 4pt
+  border-color = #00000000
+
+  padding-left = 0
+  padding-right = 1
+
+  module-margin = 1
+
+  separator = |
+  separator-foreground = ${colors.disabled}
+
+  font-0 = monospace;2
+
+  modules-left = xworkspaces xwindow
+  modules-right = filesystem pulseaudio xkeyboard memory cpu wlan eth date
+
+  cursor-click = pointer
+  cursor-scroll = ns-resize
+
+  enable-ipc = true
+
+  ; tray-position = right
+
+  ; wm-restack = generic
+  ; wm-restack = bspwm
+  ; wm-restack = i3
+
+  ; override-redirect = true
+
+  [module/xworkspaces]
+  type = internal/xworkspaces
+
+  label-active = %name%
+  label-active-background = ${colors.background-alt}
+  label-active-underline= ${colors.primary}
+  label-active-padding = 1
+
+  label-occupied = %name%
+  label-occupied-padding = 1
+
+  label-urgent = %name%
+  label-urgent-background = ${colors.alert}
+  label-urgent-padding = 1
+
+  label-empty = %name%
+  label-empty-foreground = ${colors.disabled}
+  label-empty-padding = 1
+
+  [module/xwindow]
+  type = internal/xwindow
+  label = %title:0:60:...%
+
+  [module/filesystem]
+  type = internal/fs
+  interval = 25
+
+  mount-0 = /
+
+  label-mounted = %{F#F0C674}%mountpoint%%{F-} %percentage_used%%
+
+  label-unmounted = %mountpoint% not mounted
+  label-unmounted-foreground = ${colors.disabled}
+
+  [module/pulseaudio]
+  type = internal/pulseaudio
+
+  format-volume-prefix = "VOL "
+  format-volume-prefix-foreground = ${colors.primary}
+  format-volume = <label-volume>
+
+  label-volume = %percentage%%
+
+  label-muted = muted
+  label-muted-foreground = ${colors.disabled}
+
+  [module/xkeyboard]
+  type = internal/xkeyboard
+  blacklist-0 = num lock
+
+  label-layout = %layout%
+  label-layout-foreground = ${colors.primary}
+
+  label-indicator-padding = 2
+  label-indicator-margin = 1
+  label-indicator-foreground = ${colors.background}
+  label-indicator-background = ${colors.secondary}
+
+  [module/memory]
+  type = internal/memory
+  interval = 2
+  format-prefix = "RAM "
+  format-prefix-foreground = ${colors.primary}
+  label = %percentage_used:2%%
+
+  [module/cpu]
+  type = internal/cpu
+  interval = 2
+  format-prefix = "CPU "
+  format-prefix-foreground = ${colors.primary}
+  label = %percentage:2%%
+
+  [network-base]
+  type = internal/network
+  interval = 5
+  format-connected = <label-connected>
+  format-disconnected = <label-disconnected>
+  label-disconnected = %{F#F0C674}%ifname%%{F#707880} disconnected
+
+  [module/wlan]
+  inherit = network-base
+  interface-type = wireless
+  label-connected = %{F#F0C674}%ifname%%{F-} %essid% %local_ip%
+
+  [module/eth]
+  inherit = network-base
+  interface-type = wired
+  label-connected = %{F#F0C674}%ifname%%{F-} %local_ip%
+
+  [module/date]
+  type = internal/date
+  interval = 1
+
+  date = %H:%M
+  date-alt = %Y-%m-%d %H:%M:%S
+
+  label = %date%
+  label-foreground = ${colors.primary}
+
+  [settings]
+  screenchange-reload = true
+  pseudo-transparency = true
+#+end_src
