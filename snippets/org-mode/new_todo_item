@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: New todo item
+# key: <oti
+# --
+
+* TODO ${0:name}
+  ${1:content}
