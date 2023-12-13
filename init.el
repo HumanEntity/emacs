@@ -1,3 +1,6 @@
+(defvar rune/use-ivy nil "Config option to use ivy (t) or vertico (nil)")
+(defvar rune/use-company nil "Config option to use company (t) or corfu (nil)")
+
 (setq package-archives
 	'(("melpa" . "https://melpa.org/packages/")
 	  ("elpa" . "https://elpa.gnu.org/packages/")
@@ -143,11 +146,12 @@
 
   (rune/leader-keys
     "t"  '(:ignore t :which-key "toggles")
-    "tt" '(counsel-load-theme :which-key "choose theme")
+    "tt" (if rune/use-ivy '(counsel-load-theme :which-key "choose theme") '(consult-theme :which-key "choose theme"))
 	"tf" '(treemacs :which "toggle file explorer"))
-  (rune/leader-keys
+  (when rune/use-ivy
+      (rune/leader-keys
 	"f" '(:ignore t :which-key "find")
-	"ff" '(counsel-find-file :which-key "find file")))
+	"ff" '(counsel-find-file :which-key "find file"))))
   ;; (rune/leader-keys
   ;;   "o"  '(:ignore t :which-key "org-mode")
   ;;   "oa" '(org-agenda :which-key "Org Agenda")
@@ -171,8 +175,8 @@
 
 (load-theme 'catppuccin t)
 
-(defvar rune/default-font-size 140)
-(defvar rune/default-variable-font-size 140)
+(defvar rune/default-font-size 120)
+(defvar rune/default-variable-font-size 120)
 (defvar rune/frame-transparency '(90 . 90))
 
 (setq custom-file (locate-user-emacs-file "custom-vars.el"))
@@ -444,57 +448,110 @@
 (use-package writeroom-mode
   :defer 0)
 
-(use-package ivy
-  :diminish
-  :bind (("C-s" . swiper)
-	   :map ivy-minibuffer-map
-	   ("TAB" . ivy-alt-done)
-	   ("C-l" . ivy-alt-done)
-	   ("C-j" . ivy-next-line)
-	   ("C-k" . ivy-previous-line)
-	   :map ivy-switch-buffer-map
-	   ("C-k" . ivy-previous-line)
-	   ("C-l" . ivy-done)
-	   ("C-d" . ivy-switch-buffer-kill)
-	   :map ivy-reverse-i-search-map
-	   ("C-k" . ivy-previous-line)
-	   ("C-d" . ivy-reverse-i-search-kill))
-  :config
-  (ivy-mode 1))
+(when rune/use-ivy
 
-;; Counsel Configuration
-(use-package counsel
-  :bind (("M-x" . counsel-M-x)
-	   ("C-x b" . counsel-switch-buffer)
-	   ("C-x C-f" . counsel-find-file)
-	   :map minibuffer-local-map
-	   ("C-r" . 'counsel-minibuffer-history))
-  :config
-  (counsel-mode 1))
+  (use-package ivy
+    :diminish
+    :bind (("C-s" . swiper)
+  	   :map ivy-minibuffer-map
+  	   ("TAB" . ivy-alt-done)
+  	   ("C-l" . ivy-alt-done)
+  	   ("C-j" . ivy-next-line)
+  	   ("C-k" . ivy-previous-line)
+  	   :map ivy-switch-buffer-map
+  	   ("C-k" . ivy-previous-line)
+  	   ("C-l" . ivy-done)
+  	   ("C-d" . ivy-switch-buffer-kill)
+  	   :map ivy-reverse-i-search-map
+  	   ("C-k" . ivy-previous-line)
+  	   ("C-d" . ivy-reverse-i-search-kill))
+    :config
+    (ivy-mode 1))
+  
+  ;; Counsel Configuration
+  (use-package counsel
+    :bind (("M-x" . counsel-M-x)
+  	   ("C-x b" . counsel-switch-buffer)
+  	   ("C-x C-f" . counsel-find-file)
+  	   :map minibuffer-local-map
+  	   ("C-r" . 'counsel-minibuffer-history))
+    :config
+    (counsel-mode 1))
+  
+  
+  (use-package ivy-rich
+    :init
+    (setq ivy-prescient-retain-classic-highlighting t)
+    (ivy-rich-mode 1))
+  
+  (use-package ivy-prescient
+    :after counsel
+    :config
+    (prescient-persist-mode 1)
+    (ivy-prescient-mode 1))
 
+)
 
-(use-package ivy-rich
-  :init
-  (setq ivy-prescient-retain-classic-highlighting t)
-  (ivy-rich-mode 1))
+(unless rune/use-ivy
+  (defun rune/minibuffer-backward-kill (arg)
+    "When minibuffer is completing a file name delete up to parent
+folder, otherwise delete a character backward"
+    (interactive "p")
+    (if minibuffer-completing-file-name
+	;; Borrowed from https://github.com/raxod502/selectrum/issues/498#issuecomment-803283608
+	(if (string-match-p "/." (minibuffer-contents))
+            (zap-up-to-char (- arg) ?/)
+          (delete-minibuffer-contents))
+      (delete-backward-char arg)))
+  
+  (use-package vertico
+    :bind (:map minibuffer-local-map
+		("<backspace>" . rune/minibuffer-backward-kill))
+    :init
+    (vertico-mode 1))
 
-(use-package ivy-prescient
-  :after counsel
-  :config
-  (prescient-persist-mode 1)
-  (ivy-prescient-mode 1))
+  (use-package vertico-quick
+    :straight nil
+    :after vertico)
+
+  (use-package consult
+    :demand t
+    :bind (
+	   ("C-s" . consult-line)
+	   ("C-x b" . consult-buffer)))
+  
+  ;; Enable rich annotations using the Marginalia package
+  (use-package marginalia
+    ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
+    ;; available in the *Completions* buffer, add it to the
+    ;; `completion-list-mode-map'.
+    :bind (:map minibuffer-local-map
+  		("M-A" . marginalia-cycle))
+    
+    ;; The :init section is always executed.
+    :init
+    
+    ;; Marginalia must be activated in the :init section of use-package such that
+    ;; the mode gets enabled right away. Note that this forces loading the
+    ;; package.
+    (marginalia-mode))
+
+  (use-package orderless
+    :custom
+    (completion-styles '(orderless basic regexp prefixes))
+    (completion-category-overrides '((file (styles basic partial-completion))))))
 
 ;; Helpful Configuration
 
 (use-package helpful
   :commands (helpful-callable helpful-variable helpful-command helpful-key)
-  :custom
-  (counsel-describe-function-function #'helpful-callable)
-  (counsel-describe-variable-function #'helpful-variable)
+  ;; :custom
+  ;; (counsel-describe-function-function #'helpful-callable)
+  ;; (counsel-describe-variable-function #'helpful-variable)
   :bind
-  ([remap describe-function] . counsel-describe-function)
+  ([remap describe-function] . helpful-callable)
   ([remap describe-command] . helpful-command)
-  ([remap describe-variable] . counsel-describe-variable)
+  ([remap describe-variable] . helpful-variable)
   ([remap describe-key] . helpful-key))
 
 (use-package yasnippet
@@ -788,9 +845,14 @@
     (setq projectile-project-search-path '("~/dev/*")))
   (setq projectile-switch-project-action #'projectile-dired))
 
-(use-package counsel-projectile
-  :after projectile
-  :config (counsel-projectile-mode))
+(when rune/use-ivy
+  (use-package counsel-projectile
+    :after projectile
+    :config (counsel-projectile-mode)))
+
+(unless rune/use-ivy
+  (use-package consult-projectile
+    :after consult))
 
 (use-package magit
   :commands (magit-status magit-get-current-branch)
@@ -822,41 +884,43 @@
   (setq autopair-autowrap t))
   ;; (autopair-global-mode 1))
 
-(use-package company-mode
-  :bind (:map company-active-map
-			  ("<tab>" . company-complete-selection))
-  (:map eglot-map
-        ("<tab>" . company-indent-or-complete-common))
-  :custom
-  (company-minimum-prefix-length 1)
-  (company-idle-delay 0.1)
-  :init
-  (global-company-mode 1))
+(when rune/use-company
+  (use-package company-mode
+    :bind (:map company-active-map
+		("<tab>" . company-complete-selection))
+    (:map eglot-map
+          ("<tab>" . company-indent-or-complete-common))
+    :custom
+    (company-minimum-prefix-length 1)
+    (company-idle-delay 0.1)
+    :init
+    (global-company-mode 1))
+  
+  (use-package company-box
+    :hook (company-mode . company-box-mode))
 
-(use-package company-box
-  :hook (company-mode . company-box-mode))
+  (use-package company-prescient
+    :after company
+    :config
+    (company-prescient-mode 1)))
 
-(use-package company-prescient
-  :after company
-  :config
-  (company-prescient-mode 1))
+(unless rune/use-company
 
-(use-package corfu
-  :disabled
-  ;; Optional customizations
-  :custom
-  (corfu-cycle t)                 ; Allows cycling through candidates
-  (corfu-auto t)                  ; Enable auto completion
-  (corfu-auto-prefix 1)
-  (corfu-auto-delay 0.0)
-  (corfu-popupinfo-delay '(0.5 . 0.2))
-  (corfu-preview-current 'insert) ; Do not preview current candidate
-  (corfu-preselect-first nil)
-  (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
-  (tab-always-indent 'complete)
-
-  ;; Optionally use TAB for cycling, default is `corfu-complete'.
-  :bind (:map corfu-map
+  (use-package corfu
+    ;; Optional customizations
+    :custom
+    (corfu-cycle t)                 ; Allows cycling through candidates
+    (corfu-auto t)                  ; Enable auto completion
+    (corfu-auto-prefix 1)
+    (corfu-auto-delay 0.0)
+    (corfu-popupinfo-delay '(0.5 . 0.2))
+    (corfu-preview-current 'insert) ; Do not preview current candidate
+    (corfu-preselect-first nil)
+    (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
+    (tab-always-indent 'complete)
+    
+    ;; Optionally use TAB for cycling, default is `corfu-complete'.
+    :bind (:map corfu-map
               ("M-SPC"      . corfu-insert-separator)
               ("TAB"        . corfu-complete)
               ([tab]        . corfu-complete)
@@ -866,38 +930,39 @@
               ([down]       . corfu-next)
               ("S-<return>" . corfu-insert)
               ("RET"        . nil))
-
-  :init
-  (global-corfu-mode)
-  :config
-  (add-hook 'eshell-mode-hook
-            (lambda () (setq-local corfu-quit-at-boundary t
-                              corfu-quit-no-match t
-                              corfu-auto nil)
-              (corfu-mode))))
+    
+    :init
+    (global-corfu-mode)
+    :config
+    (add-hook 'eshell-mode-hook
+              (lambda () (setq-local corfu-quit-at-boundary t
+				     corfu-quit-no-match t
+				     corfu-auto nil)
+		(corfu-mode)))))
 
 ;; (corfu-mode 1)
 
-(use-package corfu-terminal
-  :disabled
-  :after corfu
-  :load-path "lisp/corfu-terminal"
-  :config
-  (corfu-terminal-mode 1))
+(unless rune/use-company
+  (use-package corfu-terminal
+    :after corfu
+    :load-path "lisp/corfu-terminal"
+    :config
+    (corfu-terminal-mode 1)))
 
-(use-package cape
-  :disabled
-  :init
-  ;; Add `completion-at-point-functions', used by `completion-at-point'.
-  (add-to-list 'completion-at-point-functions #'cape-file)
-  ;; (add-to-list 'completion-at-point-functions #'cape-dabbrev)
-  :config
-  ;; Silence then pcomplete capf, no errors or messages!
-  (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-silent)
-
-  ;; Ensure that pcomplete does not write to the buffer
-  ;; and behaves as a pure `completion-at-point-function'.
-  (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-purify))
+(unless rune/use-company
+  (use-package cape
+    :init
+    ;; Add `completion-at-point-functions', used by `completion-at-point'.
+    (add-to-list 'completion-at-point-functions #'cape-file)
+    ;; (add-to-list 'completion-at-point-functions #'cape-dabbrev)
+    :config
+    ;; Silence then pcomplete capf, no errors or messages!
+    (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-silent)
+    
+    ;; Ensure that pcomplete does not write to the buffer
+    ;; and behaves as a pure `completion-at-point-function'.
+    (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-purify)
+    (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)))
 
 ;; (use-package lsp-mode
 ;;   :disabled
