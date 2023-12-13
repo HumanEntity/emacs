@@ -148,10 +148,14 @@
     "t"  '(:ignore t :which-key "toggles")
     "tt" (if rune/use-ivy '(counsel-load-theme :which-key "choose theme") '(consult-theme :which-key "choose theme"))
 	"tf" '(treemacs :which "toggle file explorer"))
+  (rune/leader-keys
+    "f" '(:ignore t :which-key "find"))
   (when rune/use-ivy
       (rune/leader-keys
-	"f" '(:ignore t :which-key "find")
-	"ff" '(counsel-find-file :which-key "find file"))))
+	"ff" '(counsel-find-file :which-key "find file")))
+  (unless rune/use-ivy
+    (rune/leader-keys
+      "ff" '(find-file :which-key "find file"))))
   ;; (rune/leader-keys
   ;;   "o"  '(:ignore t :which-key "org-mode")
   ;;   "oa" '(org-agenda :which-key "Org Agenda")
@@ -175,8 +179,8 @@
 
 (load-theme 'catppuccin t)
 
-(defvar rune/default-font-size 120)
-(defvar rune/default-variable-font-size 120)
+(defvar rune/default-font-size 140)
+(defvar rune/default-variable-font-size 140)
 (defvar rune/frame-transparency '(90 . 90))
 
 (setq custom-file (locate-user-emacs-file "custom-vars.el"))
@@ -507,6 +511,8 @@ folder, otherwise delete a character backward"
   (use-package vertico
     :bind (:map minibuffer-local-map
 		("<backspace>" . rune/minibuffer-backward-kill))
+    :custom
+    (vertico-cycle t)
     :init
     (vertico-mode 1))
 
@@ -538,7 +544,7 @@ folder, otherwise delete a character backward"
 
   (use-package orderless
     :custom
-    (completion-styles '(orderless basic regexp prefixes))
+    (completion-styles '(orderless basic))
     (completion-category-overrides '((file (styles basic partial-completion))))))
 
 ;; Helpful Configuration
@@ -610,12 +616,14 @@ folder, otherwise delete a character backward"
   (variable-pitch-mode 1)
   (auto-fill-mode 0)
   (visual-line-mode 1)
-  (company-mode 0)
+  (when rune/use-company
+      (company-mode 0))
+  (unless rune/use-company
+    (corfu-mode 0))
   ;; (writeroom-mode 1)
   (setq evil-auto-indent nil))
 
 (use-package org
-  :defer 0
   :commands (org-capture org-agenda)
   :hook (org-mode . rune/org-mode-setup)
   :config
@@ -755,10 +763,20 @@ folder, otherwise delete a character backward"
        "| %U | %^{Weight} | %^{Notes} |" :kill-buffer t)))
    (rune/org-font-setup))
 
-(use-package org-bullets
-  :hook (org-mode . org-bullets-mode)
-  :custom
-  (org-bullets-bullet-list '("◉" "○" "●" "○" "●" "○" "●")))
+;; (use-package org-bullets
+;;   :hook (org-mode . org-bullets-mode)
+;;   :custom
+;;   (org-bullets-bullet-list '("◉" "○" "●" "○" "●" "○" "●")))
+;; (use-package org-superstar
+;;   :hook (org-mode . org-superstar-mode)
+;;   :custom
+;;   (org-superstar-leading-bullet " ")
+;;   (org-superstar-headline-bullets-list '("◉" "○" "●" "○" "●" "○" "●")))
+(use-package org-modern
+  :hook ((org-mode . org-modern-mode)
+	 (org-agenda-finalize-hook . org-modern-agenda))
+  :init
+  (global-org-modern-mode 1))
 
 (defun rune/org-mode-visual-fill ()
   (setq visual-fill-column-width 100
@@ -825,6 +843,11 @@ folder, otherwise delete a character backward"
   :defer 0
   :config
   (setq htmlize-output-type 'inline-css))
+
+(use-package org-timeline
+  :commands org-agenda
+  :init
+  (add-hook 'org-agenda-finalize-hook 'org-timeline-insert-timeline :append))
 
 (use-package org-alert
   :straight t
@@ -952,17 +975,17 @@ folder, otherwise delete a character backward"
 (unless rune/use-company
   (use-package cape
     :init
-    ;; Add `completion-at-point-functions', used by `completion-at-point'.
+    (add-to-list 'completion-at-point-functions #'cape-dabbrev)
     (add-to-list 'completion-at-point-functions #'cape-file)
-    ;; (add-to-list 'completion-at-point-functions #'cape-dabbrev)
+    (add-to-list 'completion-at-point-functions #'cape-elisp-block)
     :config
+    (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)
     ;; Silence then pcomplete capf, no errors or messages!
     (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-silent)
     
     ;; Ensure that pcomplete does not write to the buffer
     ;; and behaves as a pure `completion-at-point-function'.
-    (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-purify)
-    (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)))
+    (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-purify)))
 
 ;; (use-package lsp-mode
 ;;   :disabled
@@ -970,6 +993,10 @@ folder, otherwise delete a character backward"
 ;;   :config
 ;;   (setq display-buffer-base-action '(display-buffer-below-selected))
 ;;   (edwina-mode 1))
+
+(use-package eglot)
+  ;; :hook (eglot-mode . (lambda () 
+  ;; 	   (add-to-list 'completion-at-point-functions #'eglot-completion-at-point))))
 
 ;; (use-package rustic
 ;;   :defer t
@@ -979,7 +1006,7 @@ folder, otherwise delete a character backward"
 
 (use-package rust-mode
   :mode "\\.rs\\'"
-  :hook (rust-mode . (lambda () (eglot)))
+  :hook (rust-mode . eglot-ensure)
   :custom
   ;; scratchpad for rust
   ;; (setq lsp-rust-clippy-preference "on")
@@ -991,8 +1018,7 @@ folder, otherwise delete a character backward"
   :config
   (setq python-shell-completion-native-enable nil)
   (python-mode)
-  :hook (python-mode . (lambda ()
-                         (eglot))))  ; or lsp-deferred
+  :hook (python-mode . eglot-ensure))  ; or lsp-deferred
 
 ;; (use-package ccls
 ;;   :defer t)
@@ -1006,10 +1032,10 @@ folder, otherwise delete a character backward"
 
 (use-package haskell-mode
   :mode "\\.hs\\'"
-  :hook ((haskell-mode . (lambda () (eglot)))
+  :hook ((haskell-mode . eglot-ensure)
 		 (haskell-mode . interactive-haskell-mode)
 		 (haskell-mode . haskell-doc-mode))
-		 ;; (haskell-mode . hindent-mode))
+		 ;; (haskell-mode . hindent-mode)
   :custom (haskell-stylish-on-save t)
   :bind ("C-c C-c" . haskell-compile))
   ;; :config
@@ -1021,7 +1047,7 @@ folder, otherwise delete a character backward"
 ;;   (setq lsp-haskell-process-args-hie '()))
 
 (use-package go-mode
-  :hook (go-mode . (lambda () (eglot)))
+  :hook (go-mode . eglot-ensure)
   :mode "\\.go\\'")
 
 (use-package v-mode
