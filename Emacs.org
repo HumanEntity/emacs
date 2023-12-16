@@ -9,7 +9,10 @@
 - [[#package-system-configuration][Package System Configuration]]
   - [[#archives-setup][Archives Setup]]
   - [[#straightel][Straight.el]]
+  - [[#elpaca][Elpaca]]
+  - [[#setupel][Setup.el]]
   - [[#use-package-configuration][Use Package Configuration]]
+  - [[#diminishel][diminish.el]]
 - [[#startup-performance][Startup Performance]]
   - [[#less-garbage-collections][Less Garbage Collections]]
   - [[#performance-check][Performance check]]
@@ -17,15 +20,18 @@
 - [[#keep-folders-clean][Keep Folders Clean]]
 - [[#key-bindings-configuration][Key Bindings Configuration]]
   - [[#evil][Evil]]
+  - [[#evil-collection][Evil collection]]
   - [[#general][General]]
   - [[#which-key][Which-Key]]
 - [[#ui-configuration][Ui Configuration]]
   - [[#theme-configuration][Theme Configuration]]
   - [[#basic-ui-configuration][Basic Ui Configuration]]
+  - [[#spacious-padding][Spacious padding]]
   - [[#font-configuration][Font Configuration]]
   - [[#icons][Icons]]
   - [[#rainbow-delimiters][Rainbow-Delimiters]]
   - [[#doom-modeline][Doom-Modeline]]
+  - [[#modeline][Modeline]]
   - [[#dashboard][Dashboard]]
   - [[#tree-sitter][Tree-Sitter]]
   - [[#ligatures][Ligatures]]
@@ -41,7 +47,7 @@
   - [[#electric-indent-mode][Electric Indent mode]]
   - [[#org-mode-font-configuration][Org Mode Font Configuration]]
   - [[#org-setup][Org Setup]]
-  - [[#org-bullets][Org-Bullets]]
+  - [[#org-modern][Org Modern]]
   - [[#visual-fill-column][Visual fill column]]
   - [[#org-roam][Org Roam]]
   - [[#org-present][Org Present]]
@@ -58,14 +64,24 @@
   - [[#corfu][Corfu]]
   - [[#cape][Cape]]
   - [[#lsp-mode][Lsp Mode]]
-  - [[#eglot][Eglot]]
+  - [[#lsp][Lsp]]
 - [[#terminal-capabilities][Terminal Capabilities]]
 - [[#spliting-configuration][Spliting Configuration]]
 
 * Packages
 #+begin_src emacs-lisp
+
+  ;; Global config
+
+  (defvar rune/config-dir "~/.config/emacs/")
+
   (defvar rune/use-ivy nil "Config option to use ivy (t) or vertico (nil)")
   (defvar rune/use-company nil "Config option to use company (t) or corfu (nil)")
+
+  ;; Load path
+
+  (add-to-list 'load-path (expand-file-name "lisp/modeline" user-emacs-directory))
+  (add-to-list 'load-path (expand-file-name "lisp/corfu-terminal" user-emacs-directory))
 #+end_src
 * Package System Configuration
 Configure package system.
@@ -84,28 +100,122 @@ Configure which package archives to use.
 ** Straight.el
 =straight.el= is alternative to emacs builtin package manager =package.el=
 #+begin_src emacs-lisp
-  (defvar bootstrap-version)
-  (let ((bootstrap-file
-         (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
-        (bootstrap-version 6))
-    (unless (file-exists-p bootstrap-file)
-      (with-current-buffer
-          (url-retrieve-synchronously
-           "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
-           'silent 'inhibit-cookies)
-        (goto-char (point-max))
-        (eval-print-last-sexp)))
-    (load bootstrap-file nil 'nomessage))
+  ;; (defvar bootstrap-version)
+  ;; (let ((bootstrap-file
+  ;;        (expand-file-name "straight/repos/straight.el/bootstrap.el" user-emacs-directory))
+  ;;       (bootstrap-version 6))
+  ;;   (unless (file-exists-p bootstrap-file)
+  ;;     (with-current-buffer
+  ;;         (url-retrieve-synchronously
+  ;;          "https://raw.githubusercontent.com/radian-software/straight.el/develop/install.el"
+  ;;          'silent 'inhibit-cookies)
+  ;;       (goto-char (point-max))
+  ;;       (eval-print-last-sexp)))
+  ;;   (load bootstrap-file nil 'nomessage))
+#+end_src
+** Elpaca
+#+begin_src emacs-lisp
+    (defvar elpaca-installer-version 0.6)
+    (defvar elpaca-directory (expand-file-name "elpaca/" user-emacs-directory))
+    (defvar elpaca-builds-directory (expand-file-name "builds/" elpaca-directory))
+    (defvar elpaca-repos-directory (expand-file-name "repos/" elpaca-directory))
+    (defvar elpaca-order '(elpaca :repo "https://github.com/progfolio/elpaca.git"
+                                  :ref nil
+                                  :files (:defaults "elpaca-test.el" (:exclude "extensions"))
+                                  :build (:not elpaca--activate-package)))
+    (let* ((repo  (expand-file-name "elpaca/" elpaca-repos-directory))
+           (build (expand-file-name "elpaca/" elpaca-builds-directory))
+           (order (cdr elpaca-order))
+           (default-directory repo))
+      (add-to-list 'load-path (if (file-exists-p build) build repo))
+      (unless (file-exists-p repo)
+        (make-directory repo t)
+        (when (< emacs-major-version 28) (require 'subr-x))
+        (condition-case-unless-debug err
+            (if-let ((buffer (pop-to-buffer-same-window "*elpaca-bootstrap*"))
+                     ((zerop (call-process "git" nil buffer t "clone"
+                                           (plist-get order :repo) repo)))
+                     ((zerop (call-process "git" nil buffer t "checkout"
+                                           (or (plist-get order :ref) "--"))))
+                     (emacs (concat invocation-directory invocation-name))
+                     ((zerop (call-process emacs nil buffer nil "-Q" "-L" "." "--batch"
+                                           "--eval" "(byte-recompile-directory \".\" 0 'force)")))
+                     ((require 'elpaca))
+                     ((elpaca-generate-autoloads "elpaca" repo)))
+                (progn (message "%s" (buffer-string)) (kill-buffer buffer))
+              (error "%s" (with-current-buffer buffer (buffer-string))))
+          ((error) (warn "%s" err) (delete-directory repo 'recursive))))
+      (unless (require 'elpaca-autoloads nil t)
+        (require 'elpaca)
+        (elpaca-generate-autoloads "elpaca" repo)
+        (load "./elpaca-autoloads")))
+    (add-hook 'after-init-hook #'elpaca-process-queues)
+    (elpaca `(,@elpaca-order))
+
+#+end_src
+** Setup.el
+#+begin_src emacs-lisp
+  (elpaca setup (require 'setup))
+  (elpaca-process-queues)
+#+end_src
+*** Elpaca integration
+#+begin_src emacs-lisp
+  (defun setup-wrap-to-install-package (body _name)
+    "Wrap BODY in an `elpaca' block if necessary.
+  The body is wrapped in an `elpaca' block if `setup-attributes'
+  contains an alist with the key `elpaca'."
+    (if (assq 'elpaca setup-attributes)
+        `(elpaca ,(cdr (assq 'elpaca setup-attributes)) ,@(macroexp-unprogn body))
+      body))
+  ;; Add the wrapper function
+  (add-to-list 'setup-modifier-list #'setup-wrap-to-install-package)
+  (setup-define :elpaca
+  	      (lambda (order &rest recipe)
+  		(push (cond
+  		       ((eq order t) `(elpaca . ,(setup-get 'feature)))
+  		       ((eq order nil) '(elpaca . nil))
+  		       (`(elpaca . (,order ,@recipe))))
+  		      setup-attributes)
+  		;; If the macro wouldn't return nil, it would try to insert the result of
+  		;; `push' which is the new value of the modified list. As this value usually
+  		;; cannot be evaluated, it is better to return nil which the byte compiler
+  		;; would optimize away anyway.
+  		nil)
+  	      :documentation "Install ORDER with `elpaca'.
+  The ORDER can be used to deduce the feature context."
+  	      :shorthand #'cadr)
+#+end_src
+*** :load-after
+#+begin_src emacs-lisp  
+(setup-define :load-after
+    (lambda (features &rest body)
+      (let ((body `(progn
+                     (require ',(setup-get 'feature))
+                     ,@body)))
+        (dolist (feature (if (listp features)
+                             (nreverse features)
+                           (list features)))
+          (setq body `(with-eval-after-load ',feature ,body)))
+        body))
+  :documentation "Load the current feature after FEATURES."
+  :indent 1)
+#+end_src
+*** :disabled
+#+begin_src emacs-lisp
+  (setup-define :disabled
+    (lambda ()
+      `,(setup-quit))
+    :documentation "Always stop evaluating the body.")
 #+end_src
 ** Use Package Configuration
 Setup of =use-package=, a configuration tool for easy config of packages
 
 #+begin_src emacs-lisp
 
-  (setq straight-disable-native-compile nil)
-  (straight-use-package 'use-package)
+  ;; (setq straight-disable-native-compile nil)
+  ;; (straight-use-package 'use-package)
 
-  (setq straight-use-package-by-default t)
+  ;; (setq straight-use-package-by-default t)
 
   ;; (package-initialize)
 
@@ -114,24 +224,41 @@ Setup of =use-package=, a configuration tool for easy config of packages
   ;;   (package-refresh-contents)
   ;;   (package-install 'use-package))
   ;; (eval-when-compile (require 'use-package))
+  (elpaca elpaca-use-package
+    ;; Enable :elpaca use-package keyword.
+    (elpaca-use-package-mode)
+    ;; Assume :elpaca t unless otherwise specified.
+    (setq elpaca-use-package-by-default t))
+
+  ;; Block until current queue processed.
+  (elpaca-wait)
+
   (setq use-package-verbose t)
   (setq use-package-always-defer t)
   (setq package-native-compile t)
   (setq comp-deferred-compilation nil)
 
 #+end_src
-
+** diminish.el
+#+begin_src emacs-lisp
+  (elpaca diminish (require 'diminish))
+  (elpaca-wait)
+#+end_src
 * Startup Performance
 ** Less Garbage Collections
 This snippet helps reduce loading speed with *garbage collection* frequency and amount
 #+begin_src emacs-lisp
   ;; Using garbage magic hack.
-  (use-package gcmh
-    :config
+  ;; (use-package gcmh
+  ;;   :config
+  ;;   (gcmh-mode 1))
+  ;; ;; Setting garbage collection threshold
+  ;; (setq gc-cons-threshold 402653184
+  ;;       gc-cons-percentage 0.6)
+  (setup (:elpaca gcmh)
+    (:option gc-cons-threshold 402653184)
+    (:option gc-cons-percentage 0.6)
     (gcmh-mode 1))
-  ;; Setting garbage collection threshold
-  (setq gc-cons-threshold 402653184
-        gc-cons-percentage 0.6)
 
 #+end_src
 ** Performance check
@@ -170,14 +297,18 @@ Configure =no-littering= package to make Emacs don't leave backup files.
   ;; reliably, set `user-emacs-directory` before loading no-littering!
   (setq user-emacs-directory "~/.cache/emacs")
 
-  (use-package no-littering
-    :defer nil)
+  ;; (use-package no-littering
+  ;;   :defer nil
+  ;;   :config
 
-  ;; no-littering doesn't set this by default so we must place
-  ;; auto save files in the same path as it uses for sessions
-  (setq auto-save-file-name-transforms
-        `((".*" ,(no-littering-expand-var-file-name "auto-save/") t)))
+  ;;   ;; no-littering doesn't set this by default so we must place
+  ;;   ;; auto save files in the same path as it uses for sessions
+  ;;   (setq auto-save-file-name-transforms
+  ;; 	  `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
 
+  (setup (:elpaca no-littering)
+    (:option auto-save-file-name-transforms
+  	  `((".*" ,(no-littering-expand-var-file-name "auto-save/") t))))
 
   (setq backup-directory-alist `(("." . ,(expand-file-name "tmp/backups/" user-emacs-directory))))
   (setq create-lockfiles nil)
@@ -188,7 +319,7 @@ Configure =no-littering= package to make Emacs don't leave backup files.
   (setq auto-save-list-file-prefix (expand-file-name "tmp/auto-saves/sessions/" user-emacs-directory)
         auto-save-file-name-transforms `((".*" ,(expand-file-name "tmp/auto-saves/" user-emacs-directory) t)))
 
-  
+
 #+end_src
 * Key Bindings Configuration
 ** Evil
@@ -209,15 +340,18 @@ Configure =no-littering= package to make Emacs don't leave backup files.
 
 #+end_src
 
-*** Evil collection
+** Evil collection
 =evil-collection= setup for mode specified keybindings.
 
 #+begin_src emacs-lisp
-  (use-package evil-collection
-    :defer nil
-    :after evil
-    :config
-    (evil-collection-init))
+  ;; (use-package evil-collection
+  ;;   :defer nil
+  ;;   :after evil
+  ;;   :config
+  ;;   (evil-collection-init))
+  (setup (:elpaca evil-collection)
+    (:load-after evil
+  	       (evil-collection-init)))
 #+end_src
 
 *** Evil NerdCommenter
@@ -228,9 +362,11 @@ Better commenting =evil-nerd-commenter=.
 | evilnc-comment-or-uncomment-lines | commend selected lines | M-/     |
 
 #+begin_src emacs-lisp
-  (use-package evil-nerd-commenter
-    :after evil
-    :bind ("M-/" . evilnc-comment-or-uncomment-lines))
+  ;; (use-package evil-nerd-commenter
+  ;;   :after evil
+  ;;   :bind ("M-/" . evilnc-comment-or-uncomment-lines))
+  (setup (:elpaca evil-nerd-commenter)
+    (:global "M-/" evilnc-comment-or-uncomment-lines))
 #+end_src
 *** Evil
 =evil= setup.
@@ -243,16 +379,35 @@ Better commenting =evil-nerd-commenter=.
 
 #+begin_src emacs-lisp
 
-  (use-package evil
-    :defer t
-    :init
+  ;; (use-package evil
+  ;;   :defer t
+  ;;   :init
+  ;;   (setq evil-want-integration t)
+  ;;   (setq evil-want-keybinding nil)
+  ;;   (setq evil-want-C-u-scroll t)
+  ;;   (setq evil-want-C-i-jump nil)
+  ;;   ;;  :hook (evil-mode . rune/evil-hook)
+  ;;   :config
+  ;;   (evil-mode)
+  ;;   (define-key evil-insert-state-map (kbd "C-g") 'evil-normal-state)
+  ;;   (define-key evil-insert-state-map (kbd "C-h") 'evil-delete-backward-char-and-join)
+
+  ;;   ;; Use visual line motions even outside of visual-line-mode buffers
+  ;;   (evil-global-set-key 'motion "j" 'evil-next-visual-line)
+  ;;   (evil-global-set-key 'motion "k" 'evil-previous-visual-line)
+
+  ;;   (evil-set-initial-state 'messages-buffer-mode 'normal)
+  ;;   (evil-set-initial-state 'dashboard-mode 'normal))
+
+  ;; Little code to get mode indication in evil
+
+  (setup (:elpaca evil)
     (setq evil-want-integration t)
     (setq evil-want-keybinding nil)
     (setq evil-want-C-u-scroll t)
     (setq evil-want-C-i-jump nil)
     ;;  :hook (evil-mode . rune/evil-hook)
-    :config
-    (evil-mode)
+    (evil-mode 1)
     (define-key evil-insert-state-map (kbd "C-g") 'evil-normal-state)
     (define-key evil-insert-state-map (kbd "C-h") 'evil-delete-backward-char-and-join)
 
@@ -263,8 +418,7 @@ Better commenting =evil-nerd-commenter=.
     (evil-set-initial-state 'messages-buffer-mode 'normal)
     (evil-set-initial-state 'dashboard-mode 'normal))
 
-  ;; Little code to get mode indication in evil
-
+  (elpaca-wait)
   (evil-mode nil)
   (evil-mode t)
 
@@ -282,41 +436,68 @@ Configuration of =general=.
   #+begin_src emacs-lisp
     (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
 
-    (use-package general
-      :defer 0
-      :config
-      ;; (general-evil-setup t)
-      (general-create-definer rune/leader-keys
-        :keymaps '(normal insert visual emacs)
-        :prefix "SPC"
-        :global-prefix "C-SPC")
+    ;; (use-package general
+    ;;   :demand t
+    ;;   :config
+    ;;   ;; (general-evil-setup t)
+    ;;   (general-create-definer rune/leader-keys
+    ;; 	:keymaps '(normal insert visual emacs)
+    ;; 	:prefix "SPC"
+    ;; 	:global-prefix "C-SPC")
 
-      (rune/leader-keys
-        "t"  '(:ignore t :which-key "toggles")
-        "tt" (if rune/use-ivy '(counsel-load-theme :which-key "choose theme") '(consult-theme :which-key "choose theme"))
-    	"tf" '(treemacs :which "toggle file explorer"))
-      (rune/leader-keys
-        "f" '(:ignore t :which-key "find"))
-      (when rune/use-ivy
-          (rune/leader-keys
-    	"ff" '(counsel-find-file :which-key "find file")))
-      (unless rune/use-ivy
-        (rune/leader-keys
-          "ff" '(find-file :which-key "find file"))))
+    ;;   (rune/leader-keys
+    ;; 	"t"  '(:ignore t :which-key "toggles")
+    ;; 	"tt" (if rune/use-ivy '(counsel-load-theme :which-key "choose theme") '(consult-theme :which-key "choose theme"))
+    ;; 	"tf" '(treemacs :which "toggle file explorer"))
+    ;;   (rune/leader-keys
+    ;; 	"f" '(:ignore t :which-key "find"))
+    ;;   (when rune/use-ivy
+    ;; 	  (rune/leader-keys
+    ;; 	"ff" '(counsel-find-file :which-key "find file")))
+    ;;   (unless rune/use-ivy
+    ;; 	(rune/leader-keys
+    ;; 	  "ff" '(find-file :which-key "find file"))))
       ;; (rune/leader-keys
       ;;   "o"  '(:ignore t :which-key "org-mode")
       ;;   "oa" '(org-agenda :which-key "Org Agenda")
       ;;   "oc" '(org-capture :which-key "Org Capture"))
+
+    (setup (:elpaca general)
+      ;; (general-evil-setup t)
+      (general-create-definer rune/leader-keys
+    	:keymaps '(normal insert visual emacs)
+    	:prefix "SPC"
+    	:global-prefix "C-SPC")
+
+      (rune/leader-keys
+    	"t"  '(:ignore t :which-key "toggles")
+    	"tt" (if rune/use-ivy '(counsel-load-theme :which-key "choose theme") '(consult-theme :which-key "choose theme"))
+    	"tf" '(treemacs :which "toggle file explorer"))
+      (rune/leader-keys
+    	"f" '(:ignore t :which-key "find"))
+      (when rune/use-ivy
+    	  (rune/leader-keys
+    	"ff" '(counsel-find-file :which-key "find file")))
+      (unless rune/use-ivy
+    	(rune/leader-keys
+    	  "ff" '(find-file :which-key "find file"))))
+
+    (elpaca-wait)
 #+end_src
 ** Which-Key
 Configuration for =which-key=.
 #+begin_src emacs-lisp
 
-  (use-package which-key
-    :defer 0
-    :diminish which-key-mode
-    :config
-    (setq which-key-idle-delay 0.05 )
+  ;; (use-package which-key
+  ;;   :defer 0
+  ;;   :diminish which-key-mode
+  ;;   :config
+  ;;   (setq which-key-idle-delay 0.05 )
+  ;;   (which-key-mode))
+
+  (setup (:elpaca which-key)
+    (diminish 'which-key-mode)
+    (setq which-key-idle-delay 0.05)
     (which-key-mode))
 
 #+end_src
@@ -324,18 +505,29 @@ Configuration for =which-key=.
 * Ui Configuration
 ** Theme Configuration
 #+begin_src emacs-lisp
-  (add-to-list 'custom-theme-load-path "~/.config/emacs.gnu/themes/")
-  (use-package doom-themes
-    :defer t
-    :config
-    (setq doom-themes-enable-bold t
-  		doom-themes-enable-italic t))
+  ;; (add-to-list 'custom-theme-load-path "~/.config/emacs.gnu/themes/")
+  ;; (use-package doom-themes
+  ;;   :defer t
+  ;;   :config
+  ;;   (setq doom-themes-enable-bold t
+  ;; 		doom-themes-enable-italic t))
 
-  (use-package catppuccin-theme)
+  ;; (use-package catppuccin-theme)
 
-  (load-theme 'catppuccin t)
+  ;; ;;(use-package spaceway-theme
+  ;;  :elpaca nil
+  ;;  :load-path "lisp/spaceway/"
+  ;;  :init
+  ;;  (load-file "~/.config/emacs/lisp/spaceway/spaceway-theme.el"))
+
+  ;; (use-package modus-themes
+  ;;   :demand t
+  ;;   :init
+  ;;   (load-theme 'modus-vivendi-tinted t))
+  (setup (:elpaca modus-themes)
+    (load-theme 'modus-vivendi-tinted t))
+  (elpaca-wait)
 #+end_src
-
 ** Basic Ui Configuration
 Basic setup ui setup.
 
@@ -343,7 +535,7 @@ Basic setup ui setup.
 
   (defvar rune/default-font-size 140)
   (defvar rune/default-variable-font-size 140)
-  (defvar rune/frame-transparency '(90 . 90))
+  (defvar rune/frame-transparency '(100 . 100))
 
   (setq custom-file (locate-user-emacs-file "custom-vars.el"))
   (load custom-file 'noerror 'nomessage)
@@ -378,6 +570,34 @@ Basic setup ui setup.
 
 #+RESULTS:
 
+** Spacious padding
+#+begin_src emacs-lisp
+  ;; (use-package spacious-padding
+  ;;   :custom
+  ;;   (spacious-padding-widths 
+  ;;    '( :internal-border-width 15
+  ;;       :header-line-width 4
+  ;;       :mode-line-width 6
+  ;;       :tab-width 4
+  ;;       :right-divider-width 30
+  ;;       :scroll-bar-width 8))
+  ;;   (spacious-padding-subtle-mode-line
+  ;;    '(:mode-line-active default :mode-line-inactive vertical-border))
+  ;;   :init
+  ;;   (spacious-padding-mode 1))
+
+  (setup (:elpaca spacious-padding)
+    (:option spacious-padding-widths 
+	   '( :internal-border-width 15
+	      :header-line-width 4
+	      :mode-line-width 6
+	      :tab-width 4
+	      :right-divider-width 30
+	      :scroll-bar-width 8)
+	   spacious-padding-subtle-mode-line
+	   '(:mode-line-active default :mode-line-inactive vertical-border))
+    (spacious-padding-mode 1))
+#+end_src
 ** Font Configuration
 Some font faces config greatly inspired by =@systemcrafters=
 #+begin_src emacs-lisp
@@ -420,20 +640,23 @@ Configure =all-the-icons= package.
   ;;   ;; (set-fontset-font t 'unicode (font-spec :family "JetBrainsMono Nerd Font") nil 'append)
   ;;   :if (display-graphic-p))
 
-  (use-package nerd-icons
-    :defer 0
-    :straight t
-    ;; :straight (nerd-icons
-    ;;            :type git
-    ;;            :host github
-    ;;            :repo "rainstormstudio/nerd-icons.el"
-    ;;            :files (:defaults "data"))
-    :custom
-    ;; The Nerd Font you want to use in GUI
-    ;; "Symbols Nerd Font Mono" is the default and is recommended
-    ;; but you can use any other Nerd Font if you want
-    (nerd-icons-scale-factor 1.25)
-    (nerd-fonts-icons-font-family "JetBrainsMono Nerd Font"))
+  ;; (use-package nerd-icons
+  ;;   :defer 0
+  ;;   ;; :straight (nerd-icons
+  ;;   ;;            :type git
+  ;;   ;;            :host github
+  ;;   ;;            :repo "rainstormstudio/nerd-icons.el"
+  ;;   ;;            :files (:defaults "data"))
+  ;;   :custom
+  ;;   ;; The Nerd Font you want to use in GUI
+  ;;   ;; "Symbols Nerd Font Mono" is the default and is recommended
+  ;;   ;; but you can use any other Nerd Font if you want
+  ;;   (nerd-icons-scale-factor 1.25)
+  ;;   (nerd-fonts-icons-font-family "JetBrainsMono Nerd Font"))
+
+  (setup (:elpaca nerd-icons)
+    (:option nerd-icons-scale-factor 1.25
+  	   nerd-fonts-icons-font-family "JetBrainsMono Nerd Font"))
 
     ;; (use-package nerd-fonts
     ;;   :straight (nerd-fonts :type git :host github :repo "mohkale/nerd-fonts.el")
@@ -455,22 +678,30 @@ Configure =all-the-icons= package.
 Config of =rainbow-delimiters= for easier development.
 
 #+begin_src emacs-lisp
-  (use-package rainbow-delimiters
-    :hook (prog-mode . rainbow-delimiters-mode))
+  ;; (use-package rainbow-delimiters
+  ;;   :hook (prog-mode . rainbow-delimiters-mode))
+  (setup (:elpaca rainbow-delimiters)
+    (:with-mode prog-mode
+      (:hook rainbow-delimiters-mode)))
 #+end_src
 ** Doom-Modeline
 =doom-modeline= config.
 #+begin_src emacs-lisp
-  (use-package doom-modeline
-    :straight (doom-modeline
-               :type git
-               :host github
-               :repo "seagle0128/doom-modeline")
-    :demand t
-    :init
-    (require 'nerd-icons)
-    (doom-modeline-mode 1)
-    :custom ((doom-modeline-height 50)))
+  ;; (use-package doom-modeline
+  ;;   :disabled
+  ;;   :straight (doom-modeline
+  ;;              :type git
+  ;;              :host github
+  ;;              :repo "seagle0128/doom-modeline")
+  ;;   :demand t
+  ;;   :init
+  ;;   (require 'nerd-icons)
+  ;;   (doom-modeline-mode 1)
+  ;;   :custom ((doom-modeline-height 50)))
+#+end_src
+** Modeline
+#+begin_src emacs-lisp
+  (load-file (expand-file-name "lisp/modeline/modeline.el" rune/config-dir))
 #+end_src
 ** Dashboard
 My dashboard for easier acces to recent files, recent projects and =org-agenda=
@@ -515,34 +746,59 @@ My dashboard for easier acces to recent files, recent projects and =org-agenda=
   ;;                               (get-buffer-create "*dashboard*")
   ;;                               (dashboard-open)))
 
-  (use-package dashboard
-    :defer 0
-    ;; :disabled t
-    :init
-    ;; (setq initial-buffer-choice 'dashboard-open)
-    ;; (setq dashboard-set-heading-icons t)
+  ;; (use-package dashboard
+  ;;   :defer 0
+  ;;   ;; :disabled t
+  ;;   :init
+  ;;   ;; (setq initial-buffer-choice 'dashboard-open)
+  ;;   ;; (setq dashboard-set-heading-icons t)
+  ;;   (setq dashboard-set-file-icons t)
+  ;;   (setq dashboard-startup-banner "~/.config/emacs/images/logo.png"
+  ;;         dashboard-set-navigator t
+  ;;         dashboard-set-init-info t
+  ;;         dashboard-set-footer nil
+  ;;         dashboard-show-shortcuts nil
+  ;;   	      dashboard-icon-type 'nerd-icons
+  ;;   	      dashboard-display-icons-p t)
+  ;;   ;; (setq dashboard-banner-logo-title "Emacs Is More Than A Text Editor!")
+  ;;   ;; (setq dashboard-startup-banner 'logo) ;; use standard emacs logo as banner
+  ;;   ;; (setq dashboard-startup-banner "/home/dt/.config/emacs/images/emacs-dash.png")  ;; use custom image as banner
+  ;;   (setq dashboard-center-content t) ;; set to 't' for centered content
+  ;;   (setq dashboard-items '((recents . 5)
+  ;;                           (agenda . 5 )
+  ;;   						(projects . 3)
+  ;;                           (registers . 3)))
+  ;;   ;; (dashboard-modify-heading-icons '((recents . "file-text")
+  ;;   ;; 								(bookmarks . "book")))
+  ;;   :config
+  ;;   (dashboard-setup-startup-hook))
+
+  (setup (:elpaca dashboard)
+
+    ;; Init
+
     (setq dashboard-set-file-icons t)
     (setq dashboard-startup-banner "~/.config/emacs/images/logo.png"
-          dashboard-set-navigator t
-          dashboard-set-init-info t
-          dashboard-set-footer nil
-          dashboard-show-shortcuts nil
-  		dashboard-icon-type 'nerd-icons
-  		dashboard-display-icons-p t)
+	  dashboard-set-navigator t
+	  dashboard-set-init-info t
+	  dashboard-set-footer nil
+	  dashboard-show-shortcuts nil
+		dashboard-icon-type 'nerd-icons
+		dashboard-display-icons-p t)
     ;; (setq dashboard-banner-logo-title "Emacs Is More Than A Text Editor!")
     ;; (setq dashboard-startup-banner 'logo) ;; use standard emacs logo as banner
     ;; (setq dashboard-startup-banner "/home/dt/.config/emacs/images/emacs-dash.png")  ;; use custom image as banner
     (setq dashboard-center-content t) ;; set to 't' for centered content
     (setq dashboard-items '((recents . 5)
-                            (agenda . 5 )
-  						  (projects . 3)
-                            (registers . 3)))
+			    (agenda . 5 )
+						  (projects . 3)
+			    (registers . 3)))
     ;; (dashboard-modify-heading-icons '((recents . "file-text")
     ;; 								(bookmarks . "book")))
-    :config
+
+    ;; Config
+
     (dashboard-setup-startup-hook))
-
-
 
   (defun open-config ()
     (interactive)
@@ -552,7 +808,7 @@ My dashboard for easier acces to recent files, recent projects and =org-agenda=
     (interactive)
     (load-file user-init-file)
     (load-file user-init-file))
-    
+
   (rune/leader-keys
     "h" '(:ignore t :which-key "hub")
     "hd" '(dashboard-open :which-key "dashboard")
@@ -564,95 +820,99 @@ My dashboard for easier acces to recent files, recent projects and =org-agenda=
 
 ** Tree-Sitter
 #+begin_src emacs-lisp
-  (use-package tree-sitter-langs
-    :demand t)
-  (use-package tree-sitter
-    :defer 0
-    :requires (tree-sitter-langs)
-    :config
+  ;; (use-package tree-sitter-langs
+  ;;   :demand t)
+  (setup (:elpaca tree-sitter-langs))
+  ;; (use-package tree-sitter
+  ;;   :demand t
+  ;;   :requires (tree-sitter-langs)
+  ;;   :config
+  ;;   (global-tree-sitter-mode)
+  ;;   (add-hook 'tree-sitter-after-on-hook #'tree-sitter-hl-mode))
+  (setup (:elpaca tree-sitter)
+    (require 'tree-sitter-langs)
     (global-tree-sitter-mode)
     (add-hook 'tree-sitter-after-on-hook #'tree-sitter-hl-mode))
 #+end_src
 ** Ligatures
 #+begin_src emacs-lisp
 
-  (use-package ligature
-    :load-path "path-to-ligature-repo"
-    :config
-    ;; Enable the "www" ligature in every possible major mode
-    (ligature-set-ligatures 't '("www"))
-    ;; Enable traditional ligature support in eww-mode, if the
-    ;; `variable-pitch' face supports it
-    (ligature-set-ligatures 'eww-mode '("ff" "fi" "ffi"))
-    ;; Enable all Cascadia Code ligatures in programming modes
-    (ligature-set-ligatures '(prog-mode org-mode) '("|||>" "<|||" "<==>" "<!--" "####" "~~>" "***" "||=" "||>"
-                                         ":::" "::=" "=:=" "===" "==>" "=!=" "=>>" "=<<" "=/=" "!=="
-                                         "!!." ">=>" ">>=" ">>>" ">>-" ">->" "->>" "-->" "---" "-<<"
-                                         "<~~" "<~>" "<*>" "<||" "<|>" "<$>" "<==" "<=>" "<=<" "<->"
-                                         "<--" "<-<" "<<=" "<<-" "<<<" "<+>" "</>" "###" "#_(" "..<"
-                                         "..." "+++" "/==" "///" "_|_" "www" "&&" "^=" "~~" "~@" "~="
-                                         "~>" "~-" "**" "*>" "*/" "||" "|}" "|]" "|=" "|>" "|-" "{|"
-                                         "[|" "]#" "::" ":=" ":>" ":<" "$>" "==" "=>" "!=" "!!" ">:"
-                                         ">=" ">>" ">-" "-~" "-|" "->" "--" "-<" "<~" "<*" "<|" "<:"
-                                         "<$" "<=" "<>" "<-" "<<" "<+" "</" "#{" "#[" "#:" "#=" "#!"
-                                         "##" "#(" "#?" "#_" "%%" ".=" ".-" ".." ".?" "+>" "++" "?:"
-                                         "?=" "?." "??" ";;" "/*" "/=" "/>" "//" "__" "~~" "(*" "*)"
-                                         "\\\\" "://" "lambda"))
-    ;; Enables ligature checks globally in all buffers. You can also do it
-    ;; per mode with `ligature-mode'.
-    (global-ligature-mode t))
+  ;; (use-package ligature
+  ;;   :load-path "path-to-ligature-repo"
+  ;;   :config
+  ;;   ;; Enable the "www" ligature in every possible major mode
+  ;;   (ligature-set-ligatures 't '("www"))
+  ;;   ;; Enable traditional ligature support in eww-mode, if the
+  ;;   ;; `variable-pitch' face supports it
+  ;;   (ligature-set-ligatures 'eww-mode '("ff" "fi" "ffi"))
+  ;;   ;; Enable all Cascadia Code ligatures in programming modes
+  ;;   (ligature-set-ligatures '(prog-mode org-mode) '("|||>" "<|||" "<==>" "<!--" "####" "~~>" "***" "||=" "||>"
+  ;;                                        ":::" "::=" "=:=" "===" "==>" "=!=" "=>>" "=<<" "=/=" "!=="
+  ;;                                        "!!." ">=>" ">>=" ">>>" ">>-" ">->" "->>" "-->" "---" "-<<"
+  ;;                                        "<~~" "<~>" "<*>" "<||" "<|>" "<$>" "<==" "<=>" "<=<" "<->"
+  ;;                                        "<--" "<-<" "<<=" "<<-" "<<<" "<+>" "</>" "###" "#_(" "..<"
+  ;;                                        "..." "+++" "/==" "///" "_|_" "www" "&&" "^=" "~~" "~@" "~="
+  ;;                                        "~>" "~-" "**" "*>" "*/" "||" "|}" "|]" "|=" "|>" "|-" "{|"
+  ;;                                        "[|" "]#" "::" ":=" ":>" ":<" "$>" "==" "=>" "!=" "!!" ">:"
+  ;;                                        ">=" ">>" ">-" "-~" "-|" "->" "--" "-<" "<~" "<*" "<|" "<:"
+  ;;                                        "<$" "<=" "<>" "<-" "<<" "<+" "</" "#{" "#[" "#:" "#=" "#!"
+  ;;                                        "##" "#(" "#?" "#_" "%%" ".=" ".-" ".." ".?" "+>" "++" "?:"
+  ;;                                        "?=" "?." "??" ";;" "/*" "/=" "/>" "//" "__" "~~" "(*" "*)"
+  ;;                                        "\\\\" "://" "lambda"))
+  ;;   ;; Enables ligature checks globally in all buffers. You can also do it
+  ;;   ;; per mode with `ligature-mode'.
+  ;;   (global-ligature-mode t))
 
-  (defun rune/prettify-set ()
-    (interactive)
-    (setq prettify-symbols-alist
-          '(("lambda" . "λ"))))
-     ;;        ("|>" . "▷")
-     ;;        ("<|" . "◁")
-     ;;        ("->>" . "↠")
-     ;;        ("->" . "→")
-     ;;        ("<-" . "←")
-     ;;        ("=>" . "⇒")
-     ;;        ("<=" . "≤")
-     ;;        (">=" . "≥"))))
+  ;; (defun rune/prettify-set ()
+  ;;   (interactive)
+  ;;   (setq prettify-symbols-alist
+  ;;         '(("lambda" . "λ"))))
+  ;;    ;;        ("|>" . "▷")
+  ;;    ;;        ("<|" . "◁")
+  ;;    ;;        ("->>" . "↠")
+  ;;    ;;        ("->" . "→")
+  ;;    ;;        ("<-" . "←")
+  ;;    ;;        ("=>" . "⇒")
+  ;;    ;;        ("<=" . "≤")
+  ;;    ;;        (">=" . "≥"))))
 
-  (defun rune/prettify-org-set ()
-    (interactive)
-    (rune/prettify-set)
-    (setq prettify-symbols-alist '(("TODO" . "")
-                                   ("WAIT" . "")        
-                                   ("NOPE" . "")
-                                   ("DONE" . "﫠")
-                                   ("[#A]" . "")
-                                   ("[#B]" . "")
-                                   ("[#C]" . "")
-                                   ("#+author:" . "")
-                                   ("#+title:" . "﫳"))))
-                           ;; ("[ ]" . "☐")
-                           ;; ("[X]" . "☑")
-                           ;; ("[-]" . "❍")
-                           ;; ;; ("TODO" . "")
-                           ;; ("TODO" . "")
-                           ;; ("WAIT" . "󰏦")        
-                           ;; ("NOPE" . "󰜺")
-                           ;; ("DONE" . "")
-                           ;; ;; ("[#A]" . "")
-                           ;; ("[#A]" . "")
-                           ;; ;; ("[#B]" . "")
-                           ;; ("[#B]" . "󱐋")
-                           ;; ;; ("[#C]" . "")
-                           ;; ("[#C]" . "󰅶")
-         ;; (add-to-list 'prettify-symbols-alist ligature)))
+  ;; (defun rune/prettify-org-set ()
+  ;;   (interactive)
+  ;;   (rune/prettify-set)
+  ;;   (setq prettify-symbols-alist '(("TODO" . "")
+  ;;                                  ("WAIT" . "")        
+  ;;                                  ("NOPE" . "")
+  ;;                                  ("DONE" . "﫠")
+  ;;                                  ("[#A]" . "")
+  ;;                                  ("[#B]" . "")
+  ;;                                  ("[#C]" . "")
+  ;;                                  ("#+author:" . "")
+  ;;                                  ("#+title:" . "﫳"))))
+  ;;                          ;; ("[ ]" . "☐")
+  ;;                          ;; ("[X]" . "☑")
+  ;;                          ;; ("[-]" . "❍")
+  ;;                          ;; ;; ("TODO" . "")
+  ;;                          ;; ("TODO" . "")
+  ;;                          ;; ("WAIT" . "󰏦")        
+  ;;                          ;; ("NOPE" . "󰜺")
+  ;;                          ;; ("DONE" . "")
+  ;;                          ;; ;; ("[#A]" . "")
+  ;;                          ;; ("[#A]" . "")
+  ;;                          ;; ;; ("[#B]" . "")
+  ;;                          ;; ("[#B]" . "󱐋")
+  ;;                          ;; ;; ("[#C]" . "")
+  ;;                          ;; ("[#C]" . "󰅶")
+  ;;        ;; (add-to-list 'prettify-symbols-alist ligature)))
 
-     ;; (add-hook 'prog-mode-hook 'rune/prettify-set)
-  ;; (add-hook 'org-mode-hook 'rune/prettify-org-set)
-  ;; (rune/prettify-set)
-  ;; (global-prettify-symbols-mode 1)
+  ;;    ;; (add-hook 'prog-mode-hook 'rune/prettify-set)
+  ;; ;; (add-hook 'org-mode-hook 'rune/prettify-org-set)
+  ;; ;; (rune/prettify-set)
+  ;; ;; (global-prettify-symbols-mode 1)
 
 #+end_src
 ** Distraction free coding
 #+begin_src emacs-lisp
-  (use-package writeroom-mode
-    :defer 0)
+  (setup (:elpaca writeroom-mode))
 #+end_src
 * Helpful packages
 Helpful packages like =ivy= or =counsel=.
@@ -727,61 +987,101 @@ Configuration of =ivy= (=ivy-rich=) and =counsel=.
             (delete-minibuffer-contents))
         (delete-backward-char arg)))
     
-    (use-package vertico
-      :bind (:map minibuffer-local-map
-  		("<backspace>" . rune/minibuffer-backward-kill))
-      :custom
-      (vertico-cycle t)
-      :init
-      (vertico-mode 1))
+    ;; (use-package vertico
+    ;;   :bind (:map minibuffer-local-map
+    ;; 		("<backspace>" . rune/minibuffer-backward-kill)
+    ;; 		("C-j"         . vertico-next)
+    ;; 		("C-k"         . vertico-previous))
+    ;;   :custom
+    ;;   (vertico-cycle t)
+    ;;   :init
+    ;;   (vertico-mode 1))
 
-    (use-package vertico-quick
-      :straight nil
-      :after vertico)
+    (setup (:elpaca vertico)
+      (vertico-mode)
+      (:with-map vertico-map
+        (:bind "C-j" vertico-next
+  	     "C-k" vertico-previous))
+      (:with-map minibuffer-local-map
+        (:bind "<backspace>" rune/minibuffer-backward-kill))
+      (:option vertico-cycle t))
 
-    (use-package consult
-      :demand t
-      :bind (
-  	   ("C-s" . consult-line)
-  	   ("C-x b" . consult-buffer)))
+    ;; (use-package vertico-quick
+    ;;   :elpaca nil
+    ;;   :after vertico)
+
+    (setup vertico-quick
+      (:load-after vertico))
+
+    ;; (use-package consult
+    ;;   :demand t
+    ;;   :bind (
+    ;; 	   ("C-s" . consult-line)
+    ;; 	   ("C-x b" . consult-buffer)))
+
+    (setup (:elpaca consult)
+      (require 'consult)
+      (:global "C-s" consult-line
+  	     "C-x b" consult-buffer)
+      (:with-map minibuffer-local-map
+        (:bind "C-r" consult-history)))
     
     ;; Enable rich annotations using the Marginalia package
-    (use-package marginalia
-      ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
-      ;; available in the *Completions* buffer, add it to the
-      ;; `completion-list-mode-map'.
-      :bind (:map minibuffer-local-map
-    		("M-A" . marginalia-cycle))
+    ;; (use-package marginalia
+    ;;   ;; Bind `marginalia-cycle' locally in the minibuffer.  To make the binding
+    ;;   ;; available in the *Completions* buffer, add it to the
+    ;;   ;; `completion-list-mode-map'.
+    ;;   :bind (:map minibuffer-local-map
+    ;; 		("M-A" . marginalia-cycle))
       
-      ;; The :init section is always executed.
-      :init
+    ;;   ;; The :init section is always executed.
+    ;;   :init
       
-      ;; Marginalia must be activated in the :init section of use-package such that
-      ;; the mode gets enabled right away. Note that this forces loading the
-      ;; package.
+    ;;   ;; Marginalia must be activated in the :init section of use-package such that
+    ;;   ;; the mode gets enabled right away. Note that this forces loading the
+    ;;   ;; package.
+    ;;   (marginalia-mode))
+    
+    (setup (:elpaca marginalia)
+      (:option marginalia-annotators '(marginalia-annotators-heavy
+  				     marginalia-annotators-light
+  				     nil))
       (marginalia-mode))
 
-    (use-package orderless
-      :custom
-      (completion-styles '(orderless basic))
-      (completion-category-overrides '((file (styles basic partial-completion))))))
+    ;; (use-package orderless
+    ;;   :custom
+    ;;   (completion-styles '(orderless basic))
+    ;;   (completion-category-overrides '((file (styles basic partial-completion))))))
+
+    (setup (:elpaca orderless)
+      (require 'orderless)
+      (setq completion-styles '(orderless)
+  	  completion-category-defaults nil
+  	  completion-category-overrides '((file (styles . (partial-completion)))))))
 #+end_src
 ** Helpful
 Better function descriptions with =helpful=.
 
 #+begin_src emacs-lisp
-  ;; Helpful Configuration
+    ;; Helpful Configuration
 
-  (use-package helpful
-    :commands (helpful-callable helpful-variable helpful-command helpful-key)
-    ;; :custom
-    ;; (counsel-describe-function-function #'helpful-callable)
-    ;; (counsel-describe-variable-function #'helpful-variable)
-    :bind
-    ([remap describe-function] . helpful-callable)
-    ([remap describe-command] . helpful-command)
-    ([remap describe-variable] . helpful-variable)
-    ([remap describe-key] . helpful-key))
+    ;; (use-package helpful
+    ;;   :commands (helpful-callable helpful-variable helpful-command helpful-key)
+    ;;   ;; :custom
+    ;;   ;; (counsel-describe-function-function #'helpful-callable)
+    ;;   ;; (counsel-describe-variable-function #'helpful-variable)
+    ;;   :bind
+    ;;   ([remap describe-function] . helpful-callable)
+    ;;   ([remap describe-command] . helpful-command)
+    ;;   ([remap describe-variable] . helpful-variable)
+    ;;   ([remap describe-key] . helpful-key))
+
+    (setup (:elpaca helpful)
+      (:global
+          [remap describe-function] helpful-callable
+          [remap describe-command] helpful-command
+          [remap describe-variable] helpful-variable
+          [remap describe-key] helpful-key))
 
   #+end_src
 
@@ -789,12 +1089,12 @@ Better function descriptions with =helpful=.
 Some config for snippets with =yasnippet=.
 
 #+begin_src emacs-lisp
-  (use-package yasnippet
-    :defer t
-    :custom
-    (yas-snippet-dirs '("~/.config/emacs.gnu/snippets/"))
-    :config
-    (yas-global-mode 1))
+  ;; (use-package yasnippet
+  ;;   :defer t
+  ;;   :custom
+  ;;   (yas-snippet-dirs '("~/.config/emacs.gnu/snippets/"))
+  ;;   :config
+  ;;   (yas-global-mode 1))
 #+end_src
 
 * Org Mode
@@ -825,14 +1125,13 @@ Automatically tangle config from this file with =org-babel=.
 
 ** Table of Contents config
 #+begin_src elisp
-  (use-package toc-org
-    :straight t
-    :commands toc-org-enable
-    :init (add-hook 'org-mode-hook 'toc-org-enable))
+  ;; (use-package toc-org
+  ;;   :commands toc-org-enable
+  ;;   :init (add-hook 'org-mode-hook 'toc-org-enable))
+  (setup (:elpaca toc-org)
+    (:with-mode org-mode
+      (:hook toc-org-enable)))
 #+end_src
-
-#+RESULTS:
-| toc-org-enable | org-tempo-setup | #[0 \300\301\302\303\304$\207 [add-hook change-major-mode-hook org-fold-show-all append local] 5] | #[0 \300\301\302\303\304$\207 [add-hook change-major-mode-hook org-babel-show-result-all append local] 5] | org-babel-result-hide-spec | org-babel-hide-all-hashes | rune/org-mode-visual-fill | org-bullets-mode | rune/org-mode-setup | (lambda nil (add-hook 'after-save-hook #'rune/org-babel-tangle-config)) | rune/prettify-org-set | (lambda nil (display-line-numbers-mode 0)) |
 
 ** Electric Indent mode
 #+begin_src elisp
@@ -881,10 +1180,10 @@ Config of =org-mode=.
     (variable-pitch-mode 1)
     (auto-fill-mode 0)
     (visual-line-mode 1)
-    (when rune/use-company
-        (company-mode 0))
-    (unless rune/use-company
-      (corfu-mode 0))
+    ;; (when rune/use-company
+    ;;     (company-mode 0))
+    ;; (unless rune/use-company
+    ;;   (corfu-mode 0))
     ;; (writeroom-mode 1)
     (setq evil-auto-indent nil))
 
@@ -1031,7 +1330,7 @@ Config of =org-mode=.
 
 #+end_src
 
-** Org-Bullets
+** Org Modern
 Config for =org-mode= headings.
 
 #+begin_src emacs-lisp
@@ -1044,11 +1343,15 @@ Config for =org-mode= headings.
   ;;   :custom
   ;;   (org-superstar-leading-bullet " ")
   ;;   (org-superstar-headline-bullets-list '("◉" "○" "●" "○" "●" "○" "●")))
-  (use-package org-modern
-    :hook ((org-mode . org-modern-mode)
-  	 (org-agenda-finalize-hook . org-modern-agenda))
-    :init
-    (global-org-modern-mode 1))
+  ;; (use-package org-modern
+  ;;   :hook ((org-mode . org-modern-mode)
+  ;; 	 (org-agenda-finalize-hook . org-modern-agenda))
+  ;;   :init
+  ;;   (global-org-modern-mode 1))
+  (setup (:elpaca org-modern)
+    (:with-mode org-mode
+      (:hook org-modern-mode))
+    (add-hook 'org-agenda-finalize-hook 'org-modern-agenda))
 #+end_src
 
 ** Visual fill column
@@ -1060,10 +1363,15 @@ Config for =org-mode= headings.
       visual-fill-column-center-text t)
     (visual-fill-column-mode 1))
 
-  (use-package visual-fill-column
-    :defer t
-    :hook ((org-mode . rune/org-mode-visual-fill)
-           (eww-mode . rune/org-mode-visual-fill)))
+  ;; (use-package visual-fill-column
+  ;;   :defer t
+  ;;   :hook ((org-mode . rune/org-mode-visual-fill)
+  ;;          (eww-mode . rune/org-mode-visual-fill)))
+  (setup (:elpaca visual-fill-column)
+    (:with-mode org-mode
+      (:hook rune/org-mode-visual-fill))
+    (:with-mode eww-mode
+      (:hook rune/org-mode-visual-fill)))
 #+end_src
 
 ** Org Roam
@@ -1071,31 +1379,47 @@ Package for building personal knowledge building.
 
 #+begin_src emacs-lisp
 
-  (use-package org-roam
-    :after org
-    :custom
-    (org-roam-directory "~/.RoamNotes")
-    (org-roam-completion-everywhere t)
-    :bind (("C-c n l" . org-roam-buffer-toggle)
-           ("C-c n f" . org-roam-node-find)
-           ("C-c n i" . org-roam-node-insert))
-    :config
-    (org-roam-setup))
+  ;; (use-package org-roam
+  ;;   :after org
+  ;;   :custom
+  ;;   (org-roam-directory "~/.RoamNotes")
+  ;;   (org-roam-completion-everywhere t)
+  ;;   :bind (("C-c n l" . org-roam-buffer-toggle)
+  ;;          ("C-c n f" . org-roam-node-find)
+  ;;          ("C-c n i" . org-roam-node-insert))
+  ;;   :config
+  ;;   (org-roam-setup))
+
+  (setup (:elpaca org-roam)
+    (:load-after org
+      (org-roam-db-autosync-enable))
+    (:option org-roam-directory "~/.RoamNotes"
+  	   org-roam-completion-everywhere t))
 #+end_src
 ** Org Present
 Package for displaying presentations.
 
 #+begin_src emacs-lisp
-  (use-package org-present
-    :after org
-    :bind (:map org-present-mode-keymap
-  	      ("<left>" . org-present-prev)
-  	      ("<right>" . org-present-next))
-    :commands (org-present)
-    :init
-    (add-hook 'org-present-mode-hook 'rune/org-present-start)
-    (add-hook 'org-present-mode-quit-hook 'rune/org-present-quit)
-    (add-hook 'org-present-after-navigate-functions 'rune/org-present-prepare-slide))
+  ;; (use-package org-present
+  ;;   :after org
+  ;;   :bind (:map org-present-mode-keymap
+  ;; 	      ("<left>" . org-present-prev)
+  ;; 	      ("<right>" . org-present-next))
+  ;;   :commands (org-present)
+  ;;   :init
+  ;;   (add-hook 'org-present-mode-hook 'rune/org-present-start)
+  ;;   (add-hook 'org-present-mode-quit-hook 'rune/org-present-quit)
+  ;;   (add-hook 'org-present-after-navigate-functions 'rune/org-present-prepare-slide))
+
+  (setup (:elpaca org-present)
+    (:with-map org-present-mode-keymap
+      (:bind "<left>" org-present-prev
+  	   "<right>" org-present-next))
+    (:hook rune/present-start)
+    (:with-hook org-present-mode-quit-hook
+      (:hook rune/org-present-quit))
+    (:with-hook org-present-after-navigate-functions
+      (:hook rune/org-present-prepare-slide)))
 
   (defun rune/org-present-prepare-slide (buffer-name heading)
     (org-overview)
@@ -1131,27 +1455,28 @@ Package for displaying presentations.
 #+end_src
 ** Exporting
 #+begin_src emacs-lisp
-  (use-package htmlize
-    :defer 0
-    :config
+  ;; (use-package htmlize
+  ;;   :defer 0
+  ;;   :config
+  ;;   (setq htmlize-output-type 'inline-css))
+  (setup (:elpaca htmlize)
     (setq htmlize-output-type 'inline-css))
 #+end_src
 ** Agenda timeline
 #+begin_src emacs-lisp
-  (use-package org-timeline
-    :commands org-agenda
-    :init
-    (add-hook 'org-agenda-finalize-hook 'org-timeline-insert-timeline :append))
+  ;; (use-package org-timeline
+  ;;   :commands org-agenda
+  ;;   :init
+  ;;   (add-hook 'org-agenda-finalize-hook 'org-timeline-insert-timeline :append))
 #+end_src
 ** Reminders
 #+begin_src emacs-lisp
-  (use-package org-alert
-    :straight t
-    :custom (alert-default-style 'message)
-    :config
-    (setq org-alert-interval 300)
-    (setq org-alert-notification-title "Org Reminder")
-    (org-alert-enable))
+  ;; (use-package org-alert
+  ;;   :custom (alert-default-style 'message)
+  ;;   :config
+  ;;   (setq org-alert-interval 300)
+  ;;   (setq org-alert-notification-title "Org Reminder")
+  ;;   (org-alert-enable))
 #+end_src
 * Project Management
 Project management packages configurations.
@@ -1160,16 +1485,26 @@ Project management packages configurations.
 Setup of =projectile= for project management.
 
 #+begin_src emacs-lisp
-  (use-package projectile
-    :defer t
-    :diminish projectile-mode
-    :config (projectile-mode)
-    :bind-keymap
-    ("C-c p" . projectile-command-map)
-    :init
+  ;; (use-package projectile
+  ;;   :defer t
+  ;;   :diminish projectile-mode
+  ;;   :config (projectile-mode)
+  ;;   :bind-keymap
+  ;;   ("C-c p" . projectile-command-map)
+  ;;   :init
+  ;;   (when (file-directory-p "~/dev/*")
+  ;;     (setq projectile-project-search-path '("~/dev/*")))
+  ;;   (setq projectile-switch-project-action #'projectile-dired))
+
+  (setup (:elpaca projectile)
+    (:global "C-c p" projectile-command-map)
+    (diminish projectile-mode)
+    ;; Init
     (when (file-directory-p "~/dev/*")
       (setq projectile-project-search-path '("~/dev/*")))
-    (setq projectile-switch-project-action #'projectile-dired))
+    (setq projectile-switch-project-action #'projectile-dired)
+    ;; Config
+    (projectile-mode))
 #+end_src
 *** Counsel Projectile
 Integration of =counsel-projectile= with =projectile= for better experience.
@@ -1183,8 +1518,8 @@ Integration of =counsel-projectile= with =projectile= for better experience.
 *** Consult Projectile
 #+begin_src emacs-lisp
   (unless rune/use-ivy
-    (use-package consult-projectile
-      :after consult))
+    (setup (:elpaca consult-projectile)
+      (:load-after consult)))
 #+end_src
 ** Git
 *** Magit
@@ -1196,13 +1531,16 @@ Integration of =magit= package with =git= version control system.
 | magit-status | git status function | <leader> g g |
 
 #+begin_src emacs-lisp
-  (use-package magit
-    :commands (magit-status magit-get-current-branch)
-    :custom
-    (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
-#+end_src
+  ;; (use-package magit
+  ;;   :commands (magit-status magit-get-current-branch)
+  ;;   :custom
+  ;;   (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
+  (setup (:elpaca magit)
+    (:also-load magit-todos)
+    (:global "C-M-;" magit-status)
+    (:option magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
 
-#+RESULTS:
+#+end_src
 
 *** "Leader keys"
 #+begin_src emacs-lisp
@@ -1214,30 +1552,42 @@ Integration of =magit= package with =git= version control system.
 Integration with =magit= for managing pull requests and issues.
 
 #+begin_src emacs-lisp
-  (use-package forge
-    :after magit)
+  (setup (:elpaca forge)
+    (:load-after magit))
+
+  ;; (use-package forge
+  ;;   :after magit)
 #+end_src
 *** Git Gutter
 #+begin_src emacs-lisp
-  (use-package git-gutter
-    :hook (prog-mode . git-gutter-mode)
-    :requires git-gutter-fringe
-    :config
+  ;; (use-package git-gutter
+  ;;   :hook (prog-mode . git-gutter-mode)
+  ;;   :requires git-gutter-fringe
+  ;;   :config
+  ;;   (setq git-gutter:update-interval 0.02))
+
+  (setup (:elpaca git-gutter)
+    (setup (:elpaca git-gutter-fringe)
+      (define-fringe-bitmap 'git-gutter-fr:added [224] nil nil '(center repeated))
+      (define-fringe-bitmap 'git-gutter-fr:modified [224] nil nil '(center repeated))
+      (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240] nil nil 'bottom))
+    (:with-mode prog-mode
+      (:hook git-gutter-mode))
     (setq git-gutter:update-interval 0.02))
 
-  (use-package git-gutter-fringe
-    :after git-gutter
-    :config
-    (define-fringe-bitmap 'git-gutter-fr:added [224] nil nil '(center repeated))
-    (define-fringe-bitmap 'git-gutter-fr:modified [224] nil nil '(center repeated))
-    (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240] nil nil 'bottom))
+  ;; (use-package git-gutter-fringe
+  ;;   :after git-gutter
+  ;;   :config
+  ;;   (define-fringe-bitmap 'git-gutter-fr:added [224] nil nil '(center repeated))
+  ;;   (define-fringe-bitmap 'git-gutter-fr:modified [224] nil nil '(center repeated))
+  ;;   (define-fringe-bitmap 'git-gutter-fr:deleted [128 192 224 240] nil nil 'bottom))
 #+end_src
 * Auto pairs
 #+begin_src emacs-lisp
-  (use-package autopair
-    :init
-    (setq autopair-autowrap t))
-    ;; (autopair-global-mode 1))
+  ;; (use-package autopair
+  ;;   :init
+  ;;   (setq autopair-autowrap t))
+  ;; (autopair-global-mode 1)
 #+end_src
 * Completion
 Packages helping with completion.
@@ -1269,67 +1619,113 @@ Configuration for =corfu= completion.
 
 #+begin_src emacs-lisp
 
-  (unless rune/use-company
+    (unless rune/use-company
 
-    (use-package corfu
-      ;; Optional customizations
-      :custom
-      (corfu-cycle t)                 ; Allows cycling through candidates
-      (corfu-auto t)                  ; Enable auto completion
-      (corfu-auto-prefix 1)
-      (corfu-auto-delay 0.0)
-      (corfu-popupinfo-delay '(0.5 . 0.2))
-      (corfu-preview-current 'insert) ; Do not preview current candidate
-      (corfu-preselect-first nil)
-      (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
-      (tab-always-indent 'complete)
-      
-      ;; Optionally use TAB for cycling, default is `corfu-complete'.
-      :bind (:map corfu-map
-                ("M-SPC"      . corfu-insert-separator)
-                ("TAB"        . corfu-complete)
-                ([tab]        . corfu-complete)
-                ("<up>"       . corfu-previous)
-                ([up]         . corfu-previous)
-                ("<down>"     . corfu-next)
-                ([down]       . corfu-next)
-                ("S-<return>" . corfu-insert)
-                ("RET"        . nil))
-      
-      :init
-      (global-corfu-mode)
-      :config
-      (add-hook 'eshell-mode-hook
-                (lambda () (setq-local corfu-quit-at-boundary t
-  				     corfu-quit-no-match t
-  				     corfu-auto nil)
-  		(corfu-mode)))))
+      ;; (use-package corfu
+      ;;   ;; Optional customizations
+      ;;   :custom
+      ;;   (corfu-cycle t)                 ; Allows cycling through candidates
+      ;;   (corfu-auto t)                  ; Enable auto completion
+      ;;   (corfu-auto-prefix 2)
+      ;;   (corfu-auto-delay 0.1)
+      ;;   (corfu-popupinfo-delay '(0.5 . 0.2))
+      ;;   (corfu-preview-current 'insert) ; Do not preview current candidate
+      ;;   (corfu-preselect-first nil)
+      ;;   (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
+      ;;   (tab-always-indent 'complete)
+        
+      ;;   ;; Optionally use TAB for cycling, default is `corfu-complete'.
+      ;;   :bind (:map corfu-map
+      ;;             ("M-SPC"      . corfu-insert-separator)
+      ;;             ("TAB"        . corfu-complete)
+      ;;             ([tab]        . corfu-complete)
+      ;;             ("<up>"       . corfu-previous)
+      ;;             ([up]         . corfu-previous)
+      ;;             ("<down>"     . corfu-next)
+      ;;             ([down]       . corfu-next)
+      ;;             ("S-<return>" . corfu-insert)
+      ;;             ("RET"        . nil))
+        
+      ;;   :init
+      ;;   (use-package nerd-icons-corfu
+      ;;     :after corfu
+      ;;     :init
+      ;;     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
-  ;; (corfu-mode 1)
+      ;;   (global-corfu-mode 1)
+      ;;   (corfu-popupinfo-mode 1)
+      ;;   (corfu-echo-mode 1)
+      ;;   :config
+      ;;   (add-hook 'eshell-mode-hook
+      ;;             (lambda () (setq-local corfu-quit-at-boundary t
+      ;; 				     corfu-quit-no-match t
+      ;; 				     corfu-auto nil)
+      ;; 		(corfu-mode))))
+      (setup (:elpaca corfu)
+        (:option corfu-cycle t                 ; Allows cycling through candidates
+    	     corfu-auto t                  ; Enable auto completion
+    	     corfu-auto-prefix 2
+    	     corfu-auto-delay 0.1
+    	     corfu-popupinfo-delay '(0.5 . 0.2)
+    	     corfu-preview-current 'insert ; Do not preview current candidate
+    	     corfu-preselect-first nil
+    	     corfu-on-exact-match nil      ; Don't auto expand tempel snippets
+    	     tab-always-indent 'complete)
+        (:bind "M-SPC" corfu-insert-separator
+    	     "TAB" corfu-complete
+    	     "<up>" corfu-previous
+    	     "<down>" corfu-next
+    	     "S-<return>" corfu-insert
+    	     "RET" nil)
+        (setup (:elpaca nerd-icons-corfu)
+  	(add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+
+        (global-corfu-mode)
+        (corfu-popupinfo-mode 1)
+        (corfu-echo-mode 1)))
+    ;; (corfu-mode 1)
 #+end_src
 
 *** Corfu Terminal
 Simple =corfu= integration with terminal.
 
 #+begin_src  emacs-lisp
-  (unless rune/use-company
-    (use-package corfu-terminal
-      :after corfu
-      :load-path "lisp/corfu-terminal"
-      :config
-      (corfu-terminal-mode 1)))
+  ;; (unless rune/use-company
+  ;;   ;; (use-package corfu-terminal
+  ;;   ;;   :after corfu
+  ;;   ;;   :load-path "lisp/corfu-terminal"
+  ;;   ;;   :config
+  ;;   ;;   (corfu-terminal-mode 1))
+  ;;   (setup corfu-terminal
+  ;;     (:load-after corfu
+  ;;       (corfu-terminal-mode))))
 #+end_src
 ** Cape
 
 #+begin_src emacs-lisp
 
   (unless rune/use-company
-    (use-package cape
-      :init
+    ;; (use-package cape
+    ;;   :init
+    ;;   (add-to-list 'completion-at-point-functions #'cape-dabbrev)
+    ;;   (add-to-list 'completion-at-point-functions #'cape-file)
+    ;;   (add-to-list 'completion-at-point-functions #'cape-elisp-block)
+    ;;   :config
+    ;;   (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)
+    ;;   ;; Silence then pcomplete capf, no errors or messages!
+    ;;   (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-silent)
+      
+    ;;   ;; Ensure that pcomplete does not write to the buffer
+    ;;   ;; and behaves as a pure `completion-at-point-function'.
+    ;;   (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-purify))
+    (setup (:elpaca cape)
+      
+      ;; Init
       (add-to-list 'completion-at-point-functions #'cape-dabbrev)
       (add-to-list 'completion-at-point-functions #'cape-file)
       (add-to-list 'completion-at-point-functions #'cape-elisp-block)
-      :config
+
+      ;; Config
       (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)
       ;; Silence then pcomplete capf, no errors or messages!
       (advice-add 'pcomplete-completions-at-point :around #'cape-wrap-silent)
@@ -1352,11 +1748,20 @@ LSP integration for Emacs.
   ;;   (edwina-mode 1))
 #+end_src
 
-** Eglot
+** Lsp
 #+begin_src emacs-lisp
-  (use-package eglot)
-    ;; :hook (eglot-mode . (lambda () 
-    ;; 	   (add-to-list 'completion-at-point-functions #'eglot-completion-at-point))))
+  ;; (use-package lsp-mode
+  ;;   :commands (lsp lsp-deferred)
+  ;;   :init
+  ;;   (setq lsp-keymap-prefix "C-l")  ;; Or 'C-l', 's-l'
+  ;;   :config
+  ;;   (lsp-enable-which-key-integration t))
+  ;; (use-package eglot
+  ;;   :commands (eglot eglot-ensure))
+  (setup (:elpaca eglot)
+    (require 'eglot))
+      ;; :hook (eglot-mode . (lambda () 
+      ;; 	   (add-to-list 'completion-at-point-functions #'eglot-completion-at-point))))
 #+end_src
 *** Languages
 LSP servers configurations.
@@ -1365,29 +1770,43 @@ LSP servers configurations.
 #+begin_src emacs-lisp
 
   ;; (use-package rustic
+  ;;   :mode "\\.rs\\'"
+  ;;   :hook (rustic-mode . eglot-ensure)
   ;;   :defer t
   ;;   :custom
-  ;;   ;;(rustic-lsp-server . ('rust-analyzer))
+  ;;   ;; (rustic-lsp-client 'eglot)
+  ;;   (rustic-lsp-server . ('rust-analyzer))
   ;;   (rustic-analyzer-command '("rustup" "run" "stable" "rust-analyzer")))
 
-  (use-package rust-mode
-    :mode "\\.rs\\'"
-    :hook (rust-mode . eglot-ensure)
-    :custom
-    ;; scratchpad for rust
-    ;; (setq lsp-rust-clippy-preference "on")
-    (use-package rust-playground
-      :commands (rust-playground)))
+  ;; (use-package rust-mode
+  ;;   :mode "\\.rs\\'"
+  ;;   :hook (rust-mode . eglot-ensure)
+  ;;   :custom
+  ;;   ;; scratchpad for rust
+  ;;   ;; (setq lsp-rust-clippy-preference "on")
+  ;;   :config
+  ;;   (use-package rust-playground
+  ;;     :commands (rust-playground)))
+
+  (setup (:elpaca rust-mode)
+    (:file-match "\\.rs\\'")
+    (:hook eglot-ensure))
 #+end_src
 **** Python
 #+begin_src emacs-lisp
 
-  (use-package python-mode
-    :mode "\\.py\\'"
-    :config
+  ;; (use-package python-mode
+  ;;   :mode "\\.py\\'"
+  ;;   :config
+  ;;   (setq python-shell-completion-native-enable nil)
+  ;;   (python-mode)
+  ;;   :hook (python-mode . eglot-ensure))  ; or lsp-deferred 
+
+  (setup (:elpaca python-mode)
+    (:file-match "\\.py\\'")
+    (:hook eglot-ensure)
     (setq python-shell-completion-native-enable nil)
-    (python-mode)
-    :hook (python-mode . eglot-ensure))  ; or lsp-deferred 
+    (python-mode))
 #+end_src
 **** C/C++
 
@@ -1407,14 +1826,14 @@ LSP servers configurations.
 #+end_src
 **** Haskell
 #+begin_src emacs-lisp
-  (use-package haskell-mode
-    :mode "\\.hs\\'"
-    :hook ((haskell-mode . eglot-ensure)
-  		 (haskell-mode . interactive-haskell-mode)
-  		 (haskell-mode . haskell-doc-mode))
-  		 ;; (haskell-mode . hindent-mode)
-    :custom (haskell-stylish-on-save t)
-    :bind ("C-c C-c" . haskell-compile))
+  ;; (use-package haskell-mode
+  ;;   :mode "\\.hs\\'"
+  ;;   :hook ((haskell-mode . eglot-ensure)
+  ;; 		 (haskell-mode . interactive-haskell-mode)
+  ;; 		 (haskell-mode . haskell-doc-mode))
+  ;; 		 ;; (haskell-mode . hindent-mode)
+  ;;   :custom (haskell-stylish-on-save t)
+  ;;   :bind ("C-c C-c" . haskell-compile))
     ;; :config
     ;; (require 'lsp-haskell))
   ;; (use-package lsp-haskell
@@ -1425,35 +1844,39 @@ LSP servers configurations.
 #+end_src
 **** Go
 #+begin_src emacs-lisp
-  (use-package go-mode
-    :hook (go-mode . eglot-ensure)
-    :mode "\\.go\\'")
+  ;; (use-package go-mode
+  ;;   :hook (go-mode . eglot-ensure)
+  ;;   :mode "\\.go\\'")
+  (setup (:elpaca go-mode)
+    (:file-match "\\.go\\'")
+    (:hook eglot-ensure))
 #+end_src
 **** V
 #+begin_src emacs-lisp
-  (use-package v-mode
-    :straight (v-mode
-               :type git
-               :host github
-               :repo "damon-kwok/v-mode"
-               :files ("tokens" "v-mode.el"))
-    :config
-    :bind-keymap
-    ("M-z" . v-menu)
-    ("<f6>" . v-menu)
-    ("C-c C-f" . v-format-buffer)
-    :mode ("\\(\\.v?v\\|\\.vsh\\)$" . 'v-mode))
+  ;;(use-package v-mode
+  ;;  :straight (v-mode
+  ;;             :type git
+  ;;             :host github
+  ;;             :repo "damon-kwok/v-mode"
+  ;;             :files ("tokens" "v-mode.el"))
+  ;;  :config
+  ;;  :bind-keymap
+  ;;  ("M-z" . v-menu)
+  ;;  ("<f6>" . v-menu)
+  ;;  ("C-c C-f" . v-format-buffer)
+  ;;  :mode ("\\(\\.v?v\\|\\.vsh\\)$" . 'v-mode))
 #+end_src
 **** GDScript
 #+begin_src emacs-lisp
-  (use-package gdscript-mode
-    :mode "\\.gd\\'")
+  ;; (use-package gdscript-mode
+  ;;   :mode "\\.gd\\'")
 #+end_src
 
 * Terminal Capabilities
 #+begin_src emacs-lisp
-  (use-package vterm
-    :commands (vterm vterm-other-window))
+  ;; (use-package vterm
+  ;;   :commands (vterm vterm-other-window))
+  (setup (:elpaca vterm))
 #+end_src
 * Spliting Configuration
 Configuration for making Emacs prefer vertical splits.
