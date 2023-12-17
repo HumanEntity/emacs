@@ -1198,7 +1198,8 @@ folder, otherwise delete a character backward"
 ;;   :custom
 ;;   (magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
 (setup (:elpaca magit)
-  (:also-load magit-todos)
+  (setup (:elpaca magit-todos)
+     (magit-todos-mode))
   (:global "C-M-;" magit-status)
   (:option magit-display-buffer-function #'magit-display-buffer-same-window-except-diff-v1))
 
