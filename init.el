@@ -903,10 +903,8 @@ folder, otherwise delete a character backward"
   ;; (writeroom-mode 1)
   (setq evil-auto-indent nil))
 
-(use-package org
-  :commands (org-capture org-agenda)
-  :hook (org-mode . rune/org-mode-setup)
-  :config
+(setup (:elpaca org)
+  (:hook rune/org-mode-setup)
   (setq org-ellipsis " ▾")
 
   (setq org-agenda-start-with-log-mode t)
@@ -1089,10 +1087,10 @@ folder, otherwise delete a character backward"
 ;;   (org-roam-setup))
 
 (setup (:elpaca org-roam)
+  (:option org-roam-directory "~/.RoamNotes/"
+	   org-roam-completion-everywhere t)
   (:load-after org
-    (org-roam-db-autosync-enable))
-  (:option org-roam-directory "~/.RoamNotes"
-	   org-roam-completion-everywhere t))
+    (org-roam-db-autosync-enable)))
 
 ;; (use-package org-present
 ;;   :after org
@@ -1313,7 +1311,7 @@ folder, otherwise delete a character backward"
 	     corfu-on-exact-match nil      ; Don't auto expand tempel snippets
 	     tab-always-indent 'complete)
     (:bind "M-SPC" corfu-insert-separator
-	     "TAB" corfu-complete
+	     "TAB" corfu-insert
 	     "<up>" corfu-previous
 	     "<down>" corfu-next
 	     "S-<return>" corfu-insert

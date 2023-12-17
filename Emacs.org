@@ -1187,10 +1187,8 @@ Config of =org-mode=.
     ;; (writeroom-mode 1)
     (setq evil-auto-indent nil))
 
-  (use-package org
-    :commands (org-capture org-agenda)
-    :hook (org-mode . rune/org-mode-setup)
-    :config
+  (setup (:elpaca org)
+    (:hook rune/org-mode-setup)
     (setq org-ellipsis " ▾")
 
     (setq org-agenda-start-with-log-mode t)
@@ -1391,10 +1389,10 @@ Package for building personal knowledge building.
   ;;   (org-roam-setup))
 
   (setup (:elpaca org-roam)
+    (:option org-roam-directory "~/.RoamNotes/"
+  	   org-roam-completion-everywhere t)
     (:load-after org
-      (org-roam-db-autosync-enable))
-    (:option org-roam-directory "~/.RoamNotes"
-  	   org-roam-completion-everywhere t))
+      (org-roam-db-autosync-enable)))
 #+end_src
 ** Org Present
 Package for displaying presentations.
@@ -1620,71 +1618,71 @@ Configuration for =corfu= completion.
 
 #+begin_src emacs-lisp
 
-    (unless rune/use-company
+  (unless rune/use-company
 
-      ;; (use-package corfu
-      ;;   ;; Optional customizations
-      ;;   :custom
-      ;;   (corfu-cycle t)                 ; Allows cycling through candidates
-      ;;   (corfu-auto t)                  ; Enable auto completion
-      ;;   (corfu-auto-prefix 2)
-      ;;   (corfu-auto-delay 0.1)
-      ;;   (corfu-popupinfo-delay '(0.5 . 0.2))
-      ;;   (corfu-preview-current 'insert) ; Do not preview current candidate
-      ;;   (corfu-preselect-first nil)
-      ;;   (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
-      ;;   (tab-always-indent 'complete)
-        
-      ;;   ;; Optionally use TAB for cycling, default is `corfu-complete'.
-      ;;   :bind (:map corfu-map
-      ;;             ("M-SPC"      . corfu-insert-separator)
-      ;;             ("TAB"        . corfu-complete)
-      ;;             ([tab]        . corfu-complete)
-      ;;             ("<up>"       . corfu-previous)
-      ;;             ([up]         . corfu-previous)
-      ;;             ("<down>"     . corfu-next)
-      ;;             ([down]       . corfu-next)
-      ;;             ("S-<return>" . corfu-insert)
-      ;;             ("RET"        . nil))
-        
-      ;;   :init
-      ;;   (use-package nerd-icons-corfu
-      ;;     :after corfu
-      ;;     :init
-      ;;     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+    ;; (use-package corfu
+    ;;   ;; Optional customizations
+    ;;   :custom
+    ;;   (corfu-cycle t)                 ; Allows cycling through candidates
+    ;;   (corfu-auto t)                  ; Enable auto completion
+    ;;   (corfu-auto-prefix 2)
+    ;;   (corfu-auto-delay 0.1)
+    ;;   (corfu-popupinfo-delay '(0.5 . 0.2))
+    ;;   (corfu-preview-current 'insert) ; Do not preview current candidate
+    ;;   (corfu-preselect-first nil)
+    ;;   (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
+    ;;   (tab-always-indent 'complete)
+      
+    ;;   ;; Optionally use TAB for cycling, default is `corfu-complete'.
+    ;;   :bind (:map corfu-map
+    ;;             ("M-SPC"      . corfu-insert-separator)
+    ;;             ("TAB"        . corfu-complete)
+    ;;             ([tab]        . corfu-complete)
+    ;;             ("<up>"       . corfu-previous)
+    ;;             ([up]         . corfu-previous)
+    ;;             ("<down>"     . corfu-next)
+    ;;             ([down]       . corfu-next)
+    ;;             ("S-<return>" . corfu-insert)
+    ;;             ("RET"        . nil))
+      
+    ;;   :init
+    ;;   (use-package nerd-icons-corfu
+    ;;     :after corfu
+    ;;     :init
+    ;;     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
-      ;;   (global-corfu-mode 1)
-      ;;   (corfu-popupinfo-mode 1)
-      ;;   (corfu-echo-mode 1)
-      ;;   :config
-      ;;   (add-hook 'eshell-mode-hook
-      ;;             (lambda () (setq-local corfu-quit-at-boundary t
-      ;; 				     corfu-quit-no-match t
-      ;; 				     corfu-auto nil)
-      ;; 		(corfu-mode))))
-      (setup (:elpaca corfu)
-        (:option corfu-cycle t                 ; Allows cycling through candidates
-    	     corfu-auto t                  ; Enable auto completion
-    	     corfu-auto-prefix 2
-    	     corfu-auto-delay 0.1
-    	     corfu-popupinfo-delay '(0.5 . 0.2)
-    	     corfu-preview-current 'insert ; Do not preview current candidate
-    	     corfu-preselect-first nil
-    	     corfu-on-exact-match nil      ; Don't auto expand tempel snippets
-    	     tab-always-indent 'complete)
-        (:bind "M-SPC" corfu-insert-separator
-    	     "TAB" corfu-complete
-    	     "<up>" corfu-previous
-    	     "<down>" corfu-next
-    	     "S-<return>" corfu-insert
-    	     "RET" nil)
-        (setup (:elpaca nerd-icons-corfu)
+    ;;   (global-corfu-mode 1)
+    ;;   (corfu-popupinfo-mode 1)
+    ;;   (corfu-echo-mode 1)
+    ;;   :config
+    ;;   (add-hook 'eshell-mode-hook
+    ;;             (lambda () (setq-local corfu-quit-at-boundary t
+    ;; 				     corfu-quit-no-match t
+    ;; 				     corfu-auto nil)
+    ;; 		(corfu-mode))))
+    (setup (:elpaca corfu)
+      (:option corfu-cycle t                 ; Allows cycling through candidates
+  	     corfu-auto t                  ; Enable auto completion
+  	     corfu-auto-prefix 2
+  	     corfu-auto-delay 0.1
+  	     corfu-popupinfo-delay '(0.5 . 0.2)
+  	     corfu-preview-current 'insert ; Do not preview current candidate
+  	     corfu-preselect-first nil
+  	     corfu-on-exact-match nil      ; Don't auto expand tempel snippets
+  	     tab-always-indent 'complete)
+      (:bind "M-SPC" corfu-insert-separator
+  	     "TAB" corfu-insert
+  	     "<up>" corfu-previous
+  	     "<down>" corfu-next
+  	     "S-<return>" corfu-insert
+  	     "RET" nil)
+      (setup (:elpaca nerd-icons-corfu)
   	(add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
-        (global-corfu-mode)
-        (corfu-popupinfo-mode 1)
-        (corfu-echo-mode 1)))
-    ;; (corfu-mode 1)
+      (global-corfu-mode)
+      (corfu-popupinfo-mode 1)
+      (corfu-echo-mode 1)))
+  ;; (corfu-mode 1)
 #+end_src
 
 *** Corfu Terminal
