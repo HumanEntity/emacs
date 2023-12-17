@@ -163,11 +163,6 @@ The ORDER can be used to deduce the feature context."
                   sauron-mode))
     (add-to-list 'evil-emacs-state-modes mode)))
 
-;; (use-package evil-collection
-;;   :defer nil
-;;   :after evil
-;;   :config
-;;   (evil-collection-init))
 (setup (:elpaca evil-collection)
   (:load-after evil
 	       (evil-collection-init)))
@@ -708,46 +703,6 @@ folder, otherwise delete a character backward"
     (:hook git-gutter-mode))
   (setq git-gutter:update-interval 0.02))
 
-;; (use-package corfu
-;;   ;; Optional customizations
-;;   :custom
-;;   (corfu-cycle t)                 ; Allows cycling through candidates
-;;   (corfu-auto t)                  ; Enable auto completion
-;;   (corfu-auto-prefix 2)
-;;   (corfu-auto-delay 0.1)
-;;   (corfu-popupinfo-delay '(0.5 . 0.2))
-;;   (corfu-preview-current 'insert) ; Do not preview current candidate
-;;   (corfu-preselect-first nil)
-;;   (corfu-on-exact-match nil)      ; Don't auto expand tempel snippets
-;;   (tab-always-indent 'complete)
-
-;;   ;; Optionally use TAB for cycling, default is `corfu-complete'.
-;;   :bind (:map corfu-map
-;;             ("M-SPC"      . corfu-insert-separator)
-;;             ("TAB"        . corfu-complete)
-;;             ([tab]        . corfu-complete)
-;;             ("<up>"       . corfu-previous)
-;;             ([up]         . corfu-previous)
-;;             ("<down>"     . corfu-next)
-;;             ([down]       . corfu-next)
-;;             ("S-<return>" . corfu-insert)
-;;             ("RET"        . nil))
-
-;;   :init
-;;   (use-package nerd-icons-corfu
-;;     :after corfu
-;;     :init
-;;     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
-
-;;   (global-corfu-mode 1)
-;;   (corfu-popupinfo-mode 1)
-;;   (corfu-echo-mode 1)
-;;   :config
-;;   (add-hook 'eshell-mode-hook
-;;             (lambda () (setq-local corfu-quit-at-boundary t
-;; 				     corfu-quit-no-match t
-;; 				     corfu-auto nil)
-;; 		(corfu-mode))))
 (setup (:elpaca corfu)
   (:option corfu-cycle t                 ; Allows cycling through candidates
 	   corfu-auto t                  ; Enable auto completion
@@ -756,20 +711,22 @@ folder, otherwise delete a character backward"
 	   corfu-popupinfo-delay '(0.5 . 0.2)
 	   corfu-preview-current 'insert ; Do not preview current candidate
 	   corfu-preselect-first nil
-	   corfu-on-exact-match nil      ; Don't auto expand tempel snippets
-	   tab-always-indent 'complete)
+	   corfu-on-exact-match nil)     ; Don't auto expand tempel snippets
   (:bind "M-SPC" corfu-insert-separator
-	 "TAB" corfu-complete
-	 "<up>" corfu-previous
-	 "<down>" corfu-next
-	 "S-<return>" corfu-insert
-	 "RET" nil)
+	   ;; "TAB" corfu-complete
+	   "<up>" corfu-previous
+	   "<down>" corfu-next
+	   "S-<return>" corfu-insert
+	   "RET" nil)
   (setup (:elpaca nerd-icons-corfu)
     (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
 
-  (global-corfu-mode)
+  (global-corfu-mode 1)
   (corfu-popupinfo-mode 1)
   (corfu-echo-mode 1))
+
+(setup emacs
+  (:option tab-always-indent 'complete))
 
 ;; (unless rune/use-company
 ;;   ;; (use-package corfu-terminal
@@ -784,9 +741,9 @@ folder, otherwise delete a character backward"
 (unless rune/use-company
   (setup (:elpaca cape)
     ;; Init
-    (add-to-list 'completion-at-point-functions #'cape-dabbrev)
-    (add-to-list 'completion-at-point-functions #'cape-file)
-    (add-to-list 'completion-at-point-functions #'cape-elisp-block)
+    ;; (add-to-list 'completion-at-point-functions #'cape-dabbrev)
+    ;; (add-to-list 'completion-at-point-functions #'cape-file)
+    ;; (add-to-list 'completion-at-point-functions #'cape-elisp-block)
 
     ;; Config
     ;; (advice-add 'eglot-completion-at-point :around #'cape-wrap-buster)
