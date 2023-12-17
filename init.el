@@ -351,48 +351,47 @@ The ORDER can be used to deduce the feature context."
 
 (setup (:elpaca writeroom-mode))
 
-(unless rune/use-ivy
-  (defun rune/minibuffer-backward-kill (arg)
-    "When minibuffer is completing a file name delete up to parent
+(defun rune/minibuffer-backward-kill (arg)
+  "When minibuffer is completing a file name delete up to parent
 folder, otherwise delete a character backward"
-    (interactive "p")
-    (if minibuffer-completing-file-name
-	;; Borrowed from https://github.com/raxod502/selectrum/issues/498#issuecomment-803283608
-	(if (string-match-p "/." (minibuffer-contents))
-            (zap-up-to-char (- arg) ?/)
-          (delete-minibuffer-contents))
-      (delete-backward-char arg)))
+  (interactive "p")
+  (if minibuffer-completing-file-name
+      ;; Borrowed from https://github.com/raxod502/selectrum/issues/498#issuecomment-803283608
+      (if (string-match-p "/." (minibuffer-contents))
+          (zap-up-to-char (- arg) ?/)
+        (delete-minibuffer-contents))
+    (delete-backward-char arg)))
   
-  (setup (:elpaca vertico)
-    (vertico-mode)
-    (:with-map vertico-map
-      (:bind "C-j" vertico-next
-	     "C-k" vertico-previous))
-    (:with-map minibuffer-local-map
-      (:bind "<backspace>" rune/minibuffer-backward-kill))
-    (:option vertico-cycle t))
+(setup (:elpaca vertico)
+  (vertico-mode)
+  (:with-map vertico-map
+    (:bind "C-j" vertico-next
+	   "C-k" vertico-previous))
+  (:with-map minibuffer-local-map
+    (:bind "<backspace>" rune/minibuffer-backward-kill))
+  (:option vertico-cycle t))
 
-  (setup vertico-quick
-    (:load-after vertico))
+(setup vertico-quick
+  (:load-after vertico))
 
-  (setup (:elpaca consult)
-    (require 'consult)
-    (:global "C-s" consult-line
-	     "C-x b" consult-buffer)
-    (:with-map minibuffer-local-map
-      (:bind "C-r" consult-history)))
-  
-  (setup (:elpaca marginalia)
-    (:option marginalia-annotators '(marginalia-annotators-heavy
-				     marginalia-annotators-light
-				     nil))
-    (marginalia-mode))
+(setup (:elpaca consult)
+  (require 'consult)
+  (:global "C-s" consult-line
+	   "C-x b" consult-buffer)
+  (:with-map minibuffer-local-map
+    (:bind "C-r" consult-history)))
 
-  (setup (:elpaca orderless)
-    (require 'orderless)
-    (setq completion-styles '(orderless)
-	  completion-category-defaults nil
-	  completion-category-overrides '((file (styles . (partial-completion)))))))
+(setup (:elpaca marginalia)
+  (:option marginalia-annotators '(marginalia-annotators-heavy
+				   marginalia-annotators-light
+				   nil))
+  (marginalia-mode))
+
+(setup (:elpaca orderless)
+  (require 'orderless)
+  (setq completion-styles '(orderless)
+	completion-category-defaults nil
+	completion-category-overrides '((file (styles . (partial-completion))))))
 
 ;; Helpful Configuration
 
@@ -675,7 +674,12 @@ folder, otherwise delete a character backward"
     (setq projectile-project-search-path '("~/dev/*")))
   (setq projectile-switch-project-action #'projectile-dired)
   ;; Config
-  (projectile-mode))
+  (projectile-mode)
+
+(rune/leader-keys
+  "p"  '(:ignore t :which-key "projectile")
+  "pf" '(projectile-find-file :which-key "find file")
+  ))
 
 (unless rune/use-ivy
   (setup (:elpaca consult-projectile)
